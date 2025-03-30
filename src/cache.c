@@ -162,7 +162,7 @@ zn_init_cache(struct zn_cache *cache, struct zbd_info *info, size_t chunk_sz, ui
     cache->zone_size = info->zone_size;
     cache->max_zone_chunks = zone_cap / chunk_sz;
     cache->backend = backend;
-    cache->active_readers = malloc(sizeof(gint) * cache->nr_zones);
+    cache->active_readers = calloc(cache->nr_zones, sizeof(gint));
     cache->reader.workload_buffer = workload_buffer;
     cache->reader.workload_max = workload_max;
 
