@@ -105,7 +105,7 @@ for file in "$directory"/*.bin; do
                                         >/dev/null
     meson compile -C buildDir >/dev/null
 
-    if [ "$device" = "/dev/nvme1n1" ]; then
+    if [ "$device" = "/dev/nvme1n1p1" ]; then
         echo "Pre-conditioning SSD"
         "${SCRIPT_DIR}/precondition-nvme1n1.sh"
     fi
