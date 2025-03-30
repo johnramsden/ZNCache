@@ -12,6 +12,8 @@
 #include "znbackend.h"
 #include "znprofiler.h"
 
+#define PRINT_THRESH_PERCENT 1
+
 #define MICROSECS_PER_SECOND 1000000
 // #define EVICT_SLEEP_US ((long) (EVICT_SLEEP_SECS * MICROSECS_PER_SECOND)) // Compile-time
 // #define ZE_READ_SLEEP_US ((long) (0.25 * MICROSECS_PER_SECOND)) // Compile-time

@@ -23,8 +23,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define PRINT_THRESH_PERCENT 10
-
 // No evict
 
 uint32_t simple_workload[] = {

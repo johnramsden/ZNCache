@@ -76,6 +76,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         TIME_NOW(&total_end_time);
         t = TIME_DIFFERENCE_NSEC(total_start_time, total_end_time);
+        ZN_PROFILER_PRINTF(cache->profiler, "CACHEHITLATENCY_EVERY,%f\n", t);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_HIT_LATENCY, t);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_CACHE_HIT_THROUGHPUT, cache->chunk_sz);
 
@@ -134,6 +135,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         TIME_NOW(&total_end_time);
         t = TIME_DIFFERENCE_NSEC(total_start_time, total_end_time);
+        ZN_PROFILER_PRINTF(cache->profiler, "CACHEMISSLATENCY_EVERY,%f\n", t);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_MISS_LATENCY, t);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_CACHE_MISS_THROUGHPUT, cache->chunk_sz);
 
@@ -193,7 +195,7 @@ zn_init_cache(struct zn_cache *cache, struct zbd_info *info, size_t chunk_sz, ui
 
     g_mutex_init(&cache->reader.lock);
     cache->reader.workload_index = 0;
-    cache->reader.thresh_perc = 10;
+    cache->reader.thresh_perc = 0;
 
     /* VERIFY_ZE_CACHE(cache); */
 }
