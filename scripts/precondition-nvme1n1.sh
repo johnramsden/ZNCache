@@ -9,5 +9,5 @@ fio --name=precondition --filename=/dev/nvme1n1 --direct=1 \
     --randrepeat=0 --ioengine=libaio \
     --numjobs=1 --group_reporting
 
-sgdisk -n 1:2048B:21541MiB -n 2:0:0 /dev/nvme1n1
+sgdisk -n 1:2048B:215401MiB -n 2:0:0 /dev/nvme1n1
 
