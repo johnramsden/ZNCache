@@ -12,8 +12,10 @@
 #include "znbackend.h"
 #include "znprofiler.h"
 
+#define PRINT_THRESH_PERCENT 1
+
 #define MICROSECS_PER_SECOND 1000000
-#define EVICT_SLEEP_US ((long) (0.5 * MICROSECS_PER_SECOND))
+// #define EVICT_SLEEP_US ((long) (EVICT_SLEEP_SECS * MICROSECS_PER_SECOND)) // Compile-time
 // #define ZE_READ_SLEEP_US ((long) (0.25 * MICROSECS_PER_SECOND)) // Compile-time
 
 #define WRITE_GRANULARITY 4096
@@ -31,6 +33,7 @@ struct zn_reader {
     uint64_t workload_index; /**< Index of the workload associated with the reader. */
     uint32_t* workload_buffer;
     uint64_t workload_max;
+    uint64_t thresh_perc; /**< The next percentage to report numbers at */
 };
 
 struct zn_cache_hitratio {

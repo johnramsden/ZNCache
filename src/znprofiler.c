@@ -12,9 +12,11 @@ char *zn_profiler_metric_names[PROFILING_METRICS] = {
     "READLATENCY",
     "WRITELATENCY",
     "FREEZONES",
-    "WRITETHROUGHPUT",
-    "READTHROUGHPUT",
+    "CACHEHITLATENCY",
+    "CACHEMISSLATENCY",
     "CACHETHROUGHPUT",
+    "CACHEHITTHROUGHPUT",
+    "CACHEMISSTHROUGHPUT",
 };
 
 enum zn_profiler_type zn_profiler_metric_types[PROFILING_METRICS] = {
@@ -24,9 +26,11 @@ enum zn_profiler_type zn_profiler_metric_types[PROFILING_METRICS] = {
     ZN_PROFILER_AVG, // Read lat
     ZN_PROFILER_AVG, // Write lat
     ZN_PROFILER_SET, // Free zones
-    ZN_PROFILER_AVG, // Write throughput
-    ZN_PROFILER_AVG, // Read throughput
-    ZN_PROFILER_AVG, // Cache throughput
+    ZN_PROFILER_AVG, // HIT Latency
+    ZN_PROFILER_AVG, // Miss latency
+    ZN_PROFILER_OVER_TIME, // Cache throughput
+    ZN_PROFILER_OVER_TIME, // Cache hit throughput
+    ZN_PROFILER_OVER_TIME, // Cache miss throughput
 };
 
 struct zn_profiler *
@@ -78,13 +82,16 @@ zn_profiler_write(struct zn_profiler *zp, const char *format, ...) {
 
 void
 zn_profiler_reset_metric(struct zn_profiler *zp, enum zn_profiler_tag metric) {
+    g_mutex_lock(&zp->lock);
     zp->metrics[metric].value = 0;
     zp->metrics[metric].count = 0;
+    g_mutex_unlock(&zp->lock);
 }
 
 void
 zn_profiler_write_all_and_reset(struct zn_profiler *zp) {
     for (uint32_t i = 0; i < PROFILING_METRICS; i++) {
+
         g_mutex_lock(&zp->lock);
         double val = zp->metrics[i].value;
         if (zp->metrics[i].type == ZN_PROFILER_AVG) {
@@ -93,12 +100,16 @@ zn_profiler_write_all_and_reset(struct zn_profiler *zp) {
             } else {
                 val = zp->metrics[i].value / zp->metrics[i].count;
             }
+        } else if (zp->metrics[i].type == ZN_PROFILER_OVER_TIME) {
+            val = zp->metrics[i].value / PROFILING_INTERVAL_SEC;
         }
+        g_mutex_unlock(&zp->lock);
+
         struct timespec ts;
         TIME_NOW(&ts);
         fprintf(zp->fp, "%f,%s,%f\n", SINCE_PROFILER_BEGAN(zp, ts), zn_profiler_metric_names[i], val);
+
         zn_profiler_reset_metric(zp, i);
-        g_mutex_unlock(&zp->lock);
     }
 }
 

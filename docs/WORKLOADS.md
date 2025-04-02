@@ -43,19 +43,19 @@ Sanity check:
 ```
 $ lsblk
 NAME         MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
-sda            8:0    0 894.3G  0 disk 
+sda            8:0    0 894.3G  0 disk
 ├─sda1         8:1    0   511M  0 part /boot/efi
-├─sda2         8:2    0     1M  0 part 
-├─sda3         8:3    0 893.8G  0 part 
+├─sda2         8:2    0     1M  0 part
+├─sda3         8:3    0 893.8G  0 part
 │ ├─vg-swap  252:0    0     8G  0 lvm  [SWAP]
 │ ├─vg-root1 252:1    0  92.7G  0 lvm  /
 │ ├─vg-var1  252:2    0  10.5G  0 lvm  /var
 │ ├─vg-root2 252:3    0  92.7G  0 lvm  /altroot
 │ ├─vg-var2  252:4    0  10.5G  0 lvm  /altroot/var
 │ └─vg-data  252:5    0 669.4G  0 lvm  /data
-└─sda4         8:4    0     1M  0 part 
-nvme0n1      259:0    0     2G  0 disk 
-nvme0n2      259:1    0   1.8T  0 disk 
+└─sda4         8:4    0     1M  0 part
+nvme0n1      259:0    0     2G  0 disk
+nvme0n2      259:1    0   1.8T  0 disk
 nvme1n1      259:2    0 894.3G  0 disk
 ```
 
@@ -95,5 +95,35 @@ After running a workload split data via:
 Plot via:
 
 ```shell
-for f in $OUTPUT_DIR/* ; do echo $f; python ./eval/plotting/plot.py $f; done
+cd eval/plotting
+python3 -m venv .venv
+. ./.venv/bin/activate
+pip install -r requirements.txt
+./plot.sh
+deactivate
+```
+
+Plots will be in `./data`
+
+## Pre-conditioning
+
+```shell
+fio --name=precondition --filename=/dev/nvme1n1 --direct=1 \
+    --rw=randwrite --bs=64k --size=100% --loops=2 \
+    --randrepeat=0 --ioengine=libaio \
+    --numjobs=1 --group_reporting
+```
+
+## Partitioning
+
+Create a partition from 2948B to `(1077*100)+1`MiB, another partition on remainder
+
+```shell
+sgdisk -n 1:2048B:107701MiB -n 2:0:0 /dev/nvme1n1
+```
+
+To delete:
+
+```
+sgdisk --zap-all /dev/nvme1n1
 ```

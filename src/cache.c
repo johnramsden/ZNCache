@@ -49,11 +49,14 @@ unsigned char *
 zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_buffer) {
     unsigned char *data = NULL;
 
+    // PROFILE
+    struct timespec total_start_time, total_end_time;
+    TIME_NOW(&total_start_time);
+
     struct zone_map_result result = zn_cachemap_find(&cache->cache_map, id);
 
     // Found the entry, read it from disk, update eviction, and decrement reader.
     if (result.type == RESULT_LOC) {
-        // PROFILE START
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
         unsigned char *data = zn_read_from_disk(cache, &result.value.location);
@@ -61,8 +64,6 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_LATENCY, t);
         ZN_PROFILER_PRINTF(cache->profiler, "READLATENCY_EVERY,%f\n", t);
-        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_THROUGHPUT, cache->chunk_sz);
-        // PROFILE END
 
         cache->eviction_policy.update_policy(cache->eviction_policy.data, result.value.location,
                                              ZN_READ);
@@ -73,6 +74,12 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         g_mutex_lock(&cache->ratio.lock);
         cache->ratio.hits++;
         g_mutex_unlock(&cache->ratio.lock);
+
+        TIME_NOW(&total_end_time);
+        t = TIME_DIFFERENCE_NSEC(total_start_time, total_end_time);
+        ZN_PROFILER_PRINTF(cache->profiler, "CACHEHITLATENCY_EVERY,%f\n", t);
+        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_HIT_LATENCY, t);
+        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_CACHE_HIT_THROUGHPUT, cache->chunk_sz);
 
         return data;
     } else { // result.type == RESULT_COND
@@ -103,7 +110,6 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         unsigned long long wp =
             CHUNK_POINTER(cache->zone_size, cache->chunk_sz, location.chunk_offset, location.zone);
 
-        // PROFILE START
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
         int ret = zn_write_out(cache->fd, cache->chunk_sz, data, WRITE_GRANULARITY, wp);
@@ -111,8 +117,6 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
         ZN_PROFILER_PRINTF(cache->profiler, "WRITELATENCY_EVERY,%f\n", t);
-        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_THROUGHPUT, cache->chunk_sz);
-        // PROFILE END
 
         if (ret != 0) {
             dbg_printf("Couldn't write to fd at wp=%llu, zone=%u, chunk=%u\n", wp, location.chunk_offset, location.zone);
@@ -129,6 +133,12 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         cache->eviction_policy.update_policy(cache->eviction_policy.data, location, ZN_WRITE);
 
         zn_cachemap_insert(&cache->cache_map, id, location);
+
+        TIME_NOW(&total_end_time);
+        t = TIME_DIFFERENCE_NSEC(total_start_time, total_end_time);
+        ZN_PROFILER_PRINTF(cache->profiler, "CACHEMISSLATENCY_EVERY,%f\n", t);
+        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_MISS_LATENCY, t);
+        ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_CACHE_MISS_THROUGHPUT, cache->chunk_sz);
 
         return data;
 
@@ -155,7 +165,7 @@ zn_init_cache(struct zn_cache *cache, struct zbd_info *info, size_t chunk_sz, ui
     cache->zone_size = info->zone_size;
     cache->max_zone_chunks = zone_cap / chunk_sz;
     cache->backend = backend;
-    cache->active_readers = malloc(sizeof(gint) * cache->nr_zones);
+    cache->active_readers = calloc(cache->nr_zones, sizeof(gint));
     cache->reader.workload_buffer = workload_buffer;
     cache->reader.workload_max = workload_max;
 
@@ -186,6 +196,7 @@ zn_init_cache(struct zn_cache *cache, struct zbd_info *info, size_t chunk_sz, ui
 
     g_mutex_init(&cache->reader.lock);
     cache->reader.workload_index = 0;
+    cache->reader.thresh_perc = 0;
 
     /* VERIFY_ZE_CACHE(cache); */
 }

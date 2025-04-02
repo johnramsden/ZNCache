@@ -72,7 +72,7 @@ evict_task(gpointer user_data) {
 
         uint32_t free_zones = zsm_get_num_free_zones(&cache->zone_state);
         if (free_zones > EVICT_HIGH_THRESH_ZONES) {
-            g_usleep(EVICT_SLEEP_US);
+            g_usleep(EVICT_INTERVAL_US);
             continue;
         }
 
@@ -111,10 +111,22 @@ task_function(gpointer data, gpointer user_data) {
 		}
 
 		// Increment the query index
-		uint32_t wi = thread_data->cache->reader.workload_index++;
+        bool print = false;
+        uint64_t wi = thread_data->cache->reader.workload_index++;
+        uint64_t percent = (wi * 100L) / thread_data->cache->reader.workload_max;
+
+        if (percent >= thread_data->cache->reader.thresh_perc) {
+	    thread_data->cache->reader.thresh_perc += PRINT_THRESH_PERCENT;
+            print = true; // Print while unlocked
+        }
 		g_mutex_unlock(&thread_data->cache->reader.lock);
 
-        printf("[%d]: ze_cache_get(workload[%d]=%d)\n", thread_data->tid, wi,
+        if (print) {
+            printf("[%d]:\t(%lu%%)\tze_cache_get(workload[%lu]=%d)\n", thread_data->tid, percent, wi,
+		   thread_data->cache->reader.workload_buffer[wi]);
+        }
+
+        dbg_printf("[%d]: ze_cache_get(workload[%d]=%d)\n", thread_data->tid, wi,
                thread_data->cache->reader.workload_buffer[wi]);
 
 		data_id = thread_data->cache->reader.workload_buffer[wi];
@@ -366,6 +378,9 @@ main(int argc, char **argv) {
 
     uint64_t zone_capacity = 0;
     if (device_type == ZE_BACKEND_ZNS) {
+        if (MAX_ZONES_USED != 0) {
+            info.nr_zones = MAX_ZONES_USED;
+        }
         int ret = zbd_reset_zones(fd, 0, 0);
         if (ret != 0) {
             fprintf(stderr, "Couldn't reset zones\n");

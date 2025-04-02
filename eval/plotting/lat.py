@@ -32,19 +32,19 @@ def main():
         default=None
     )
     parser.add_argument(
+        "--regression",
+        action="store_true",
+        help="Add regression line to plot."
+    )
+    parser.add_argument(
         "--type",
         help="Plot type.",
         choices=['scatter', 'line'],
         default="scatter"
     )
-    parser.add_argument(
-        "--regression",
-        action="store_true",
-        help="Add regression line to plot."
-    )
     args = parser.parse_args()
 
-    # Split the comma-delimited file paths and strip extra spaces.
+    # Split the comma-delimited input file paths and strip extra spaces.
     files = [f.strip() for f in args.data_files.split(',')]
     # If labels are provided, split them as well.
     if args.labels is not None:
@@ -53,9 +53,11 @@ def main():
             print("Error: The number of labels provided does not match the number of data files.")
             return
     else:
+        # Create a placeholder list so that we later use each file's default label.
         label_list = [None] * len(files)
 
-    overall_default_label = None  # For y-axis label and plot title, taken from first file if not overridden.
+    overall_default_label = None  # Will hold the default label from the first file if needed.
+
     plt.figure(figsize=(12, 6))
 
     for idx, file in enumerate(files):
@@ -67,13 +69,14 @@ def main():
         with open(file, 'r') as f:
             reader = csv.reader(f)
             for row in reader:
-                # Use the second column of the first row as the default label.
+                # Set the default label from the second column of the first row.
                 if default_label is None:
                     default_label = row[1]
                 try:
                     # Convert time from ms to minutes.
                     x_val = float(row[0]) / 60000.0
-                    y_val = float(row[2])
+                    # Scale y-value by dividing by 1,000,000.
+                    y_val = float(row[2]) / 1_000_000
                     if y_val == 0.0:
                         continue
                 except ValueError as e:
@@ -82,10 +85,11 @@ def main():
                 x_vals.append(x_val)
                 y_vals.append(y_val)
 
+        # For the first file, use its default label for overall y-axis label and plot title if not provided.
         if overall_default_label is None:
             overall_default_label = default_label
 
-        # Use the provided label if available; otherwise, use the default from the file.
+        # Determine the label for this dataset.
         label = label_list[idx] if label_list[idx] is not None else default_label
 
         print(f"File: {file} Average: {statistics.fmean(y_vals)}")
@@ -106,8 +110,10 @@ def main():
     # Disable scientific notation on the y-axis.
     plt.ticklabel_format(style='plain', axis='y')
     plt.xlabel("Time (minutes)")
+    # Use the yaxis flag if provided; otherwise use the default label from the first file.
     y_label = args.yaxis if args.yaxis is not None else overall_default_label
     plt.ylabel(y_label)
+    # Similarly, use the title flag if provided; otherwise use the default label from the first file.
     plot_title = args.title if args.title is not None else overall_default_label
     plt.title(plot_title)
     plt.legend()
@@ -116,7 +122,7 @@ def main():
     if args.output is not None:
         out = args.output
     plt.savefig(out)
-    # plt.show()
+    # plt.show()  # Uncomment to display the plot interactively.
 
 if __name__ == '__main__':
     main()

@@ -10,7 +10,8 @@ US_PER_SEC = 1_000_000
 BUCKET_NAME = 'znscache'
 KEY_NAME = 'random_data_2GiB.bin'
 TRANSFER_SIZES = [
-    65 * 1024,  # 65 KiB in bytes
+    64 * 1024,  # 64 KiB in bytes
+    256 * 1024 * 1024,  # 256 MiB in bytes
     512 * 1024 * 1024,  # 512 MiB in bytes
     1077 * 1024 * 1024  # 1077 MiB in bytes
 ]

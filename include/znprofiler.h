@@ -14,7 +14,8 @@
 
 enum zn_profiler_type {
     ZN_PROFILER_AVG = 0,
-    ZN_PROFILER_SET = 1
+    ZN_PROFILER_SET = 1,
+    ZN_PROFILER_OVER_TIME = 2,
 };
 
 struct zn_profiler_metrics {
@@ -23,7 +24,7 @@ struct zn_profiler_metrics {
     enum zn_profiler_type type;
 };
 
-#define PROFILING_METRICS 9 // Keep in sync with enum, zn_profiler_metric_names, and zn_profiler_metric_types
+#define PROFILING_METRICS 11 // Keep in sync with enum, zn_profiler_metric_names, and zn_profiler_metric_types
 enum zn_profiler_tag {
     ZN_PROFILER_METRIC_GET_LATENCY = 0,
     ZN_PROFILER_METRIC_CACHE_USED_MIB = 1,
@@ -31,9 +32,11 @@ enum zn_profiler_tag {
     ZN_PROFILER_METRIC_READ_LATENCY = 3,
     ZN_PROFILER_METRIC_WRITE_LATENCY = 4,
     ZN_PROFILER_METRIC_CACHE_FREE_ZONES = 5,
-    ZN_PROFILER_METRIC_WRITE_THROUGHPUT = 6,
-    ZN_PROFILER_METRIC_READ_THROUGHPUT = 7,
+    ZN_PROFILER_METRIC_HIT_LATENCY = 6,
+    ZN_PROFILER_METRIC_MISS_LATENCY= 7,
     ZN_PROFILER_METRIC_CACHE_THROUGHPUT = 8,
+    ZN_PROFILER_METRIC_CACHE_HIT_THROUGHPUT = 9,
+    ZN_PROFILER_METRIC_CACHE_MISS_THROUGHPUT = 10,
 };
 
 // (in znprofiler.c)
@@ -151,7 +154,7 @@ zn_profiler_set_metric(struct zn_profiler *zp, enum zn_profiler_tag metric, doub
  * This function sets both the cumulative value and usage count for the
  * given metric to zero, clearing any collected data.
  *
- * LOCKED BY **CALLER**
+ * LOCKED BY **CALLEE**
  *
  * @param[in,out] zp      Pointer to the profiler structure managing the metrics.
  * @param[in]     metric  Enum identifier of the metric to reset.

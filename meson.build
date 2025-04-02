@@ -16,6 +16,7 @@ zbd_lib = declare_dependency(
 # Read options
 verify_enabled = get_option('verify')
 debug_enabled = get_option('debugging')
+debugsymbols_enabled = get_option('debugsymbols')
 BLOCK_ZONE_CAPACITY = get_option('BLOCK_ZONE_CAPACITY')
 READ_SLEEP_US = get_option('READ_SLEEP_US')
 PROFILER_PRINT_EVERY = get_option('PROFILER_PRINT_EVERY')
@@ -25,6 +26,8 @@ EVICT_HIGH_THRESH_ZONES = get_option('EVICT_HIGH_THRESH_ZONES')
 EVICT_LOW_THRESH_ZONES = get_option('EVICT_LOW_THRESH_ZONES')
 EVICT_HIGH_THRESH_CHUNKS = get_option('EVICT_HIGH_THRESH_CHUNKS')
 EVICT_LOW_THRESH_CHUNKS = get_option('EVICT_LOW_THRESH_CHUNKS')
+EVICT_INTERVAL_US = get_option('EVICT_INTERVAL_US')
+MAX_ZONES_USED = get_option('MAX_ZONES_USED')
 
 # Conditional compiler flags
 cflags = [
@@ -36,6 +39,8 @@ cflags = [
     '-DEVICT_LOW_THRESH_ZONES=' + EVICT_LOW_THRESH_ZONES.to_string(),
     '-DEVICT_HIGH_THRESH_CHUNKS=' + EVICT_HIGH_THRESH_CHUNKS.to_string(),
     '-DEVICT_LOW_THRESH_CHUNKS=' + EVICT_LOW_THRESH_CHUNKS.to_string(),
+    '-DEVICT_INTERVAL_US=' + EVICT_INTERVAL_US.to_string(),
+    '-DMAX_ZONES_USED=' + MAX_ZONES_USED.to_string(),
     '-D_POSIX_C_SOURCE=199309L', # CLOCK_MONO
 ]
 
@@ -49,6 +54,8 @@ endif
 
 if debug_enabled
     cflags += ['-DDEBUG', '-g']
+elif debugsymbols_enabled
+    cflags += ['-g']
 endif
 
 # Print options for debugging purposes

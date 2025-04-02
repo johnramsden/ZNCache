@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import statistics
-import numpy as np
 import csv
 import matplotlib.pyplot as plt
+import numpy as np
 
 def main():
     parser = argparse.ArgumentParser(
@@ -18,8 +18,8 @@ def main():
     )
     parser.add_argument(
         "--yaxis",
-        help="Label for the y-axis. Defaults to the value in the second column of the first file.",
-        default=None
+        help="Label for the y-axis. Defaults to 'Throughput (MiB/s)' or the value in the second column of the first file if not provided.",
+        default="Throughput (MiB/s)"
     )
     parser.add_argument(
         "--title",
@@ -32,15 +32,15 @@ def main():
         default=None
     )
     parser.add_argument(
+        "--regression",
+        action="store_true",
+        help="Add regression line to plot."
+    )
+    parser.add_argument(
         "--type",
         help="Plot type.",
         choices=['scatter', 'line'],
         default="scatter"
-    )
-    parser.add_argument(
-        "--regression",
-        action="store_true",
-        help="Add regression line to plot."
     )
     args = parser.parse_args()
 
@@ -55,7 +55,7 @@ def main():
     else:
         label_list = [None] * len(files)
 
-    overall_default_label = None  # For y-axis label and plot title, taken from first file if not overridden.
+    overall_default_label = None  # For overall y-axis label and title from the first file.
     plt.figure(figsize=(12, 6))
 
     for idx, file in enumerate(files):
@@ -67,13 +67,14 @@ def main():
         with open(file, 'r') as f:
             reader = csv.reader(f)
             for row in reader:
-                # Use the second column of the first row as the default label.
+                # Set the default label from the second column of the first row.
                 if default_label is None:
                     default_label = row[1]
                 try:
                     # Convert time from ms to minutes.
                     x_val = float(row[0]) / 60000.0
-                    y_val = float(row[2])
+                    # Convert y-value from bytes to MiB.
+                    y_val = float(row[2]) / (1024 * 1024)
                     if y_val == 0.0:
                         continue
                 except ValueError as e:
@@ -85,7 +86,7 @@ def main():
         if overall_default_label is None:
             overall_default_label = default_label
 
-        # Use the provided label if available; otherwise, use the default from the file.
+        # Use the provided label if available; otherwise, fall back to the file's default label.
         label = label_list[idx] if label_list[idx] is not None else default_label
 
         print(f"File: {file} Average: {statistics.fmean(y_vals)}")
@@ -116,7 +117,7 @@ def main():
     if args.output is not None:
         out = args.output
     plt.savefig(out)
-    # plt.show()
+    # plt.show()  # Uncomment to display the plot interactively.
 
 if __name__ == '__main__':
     main()
