@@ -53,22 +53,23 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
     TIME_NOW(&total_start_time);
 
     struct zone_map_result result = zn_cachemap_find(&cache->cache_map, id);
+    assert(result.type != RESULT_EMPTY);
 
     // Found the entry, read it from disk, update eviction, and decrement reader.
     if (result.type == RESULT_LOC) {
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        unsigned char *data = zn_read_from_disk(cache, &result.value.location);
+        unsigned char *data = zn_read_from_disk(cache, &result.location);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_LATENCY, t);
         ZN_PROFILER_PRINTF(cache->profiler, "READLATENCY_EVERY,%f\n", t);
 
-        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.value.location,
+        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.location,
                                              ZN_READ);
 
         // Sadly, we have to remember to decrement the reader count here
-        g_atomic_int_dec_and_test(&cache->active_readers[result.value.location.zone]);
+        g_atomic_int_dec_and_test(&cache->active_readers[result.location.zone]);
 
         g_mutex_lock(&cache->ratio.lock);
         cache->ratio.hits++;
