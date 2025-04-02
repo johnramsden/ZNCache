@@ -235,6 +235,35 @@ zsm_get_active_zone_batch(int chunks) {
 }
 #endif
 
+void
+zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t count) {
+    assert(state);
+
+    // Reset and open the zone.
+
+    g_mutex_lock(&state->state_mutex);
+
+    struct zn_zone *zone = &state->state[zone_id];
+    assert(zone->state == ZN_ZONE_FULL);
+
+    int ret = reset_zone(state, zone);
+    assert(ret == 0);
+    assert(g_queue_pop_tail(state->free) == zone);
+
+    ret = open_zone(state, zone);
+    assert(ret == 0);
+    assert(g_queue_pop_tail(state->active) == zone);
+
+    zone->state = ZN_ZONE_WRITE_OCCURING;
+    zone->zone_id = zone_id;
+    zone->chunk_offset = count - 1; // The last index that is active
+    g_queue_clear(zone->invalid);
+
+    state->writes_occurring++;
+
+    g_mutex_unlock(&state->state_mutex);
+}
+
 int
 zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair) {
     assert(state);
@@ -275,7 +304,9 @@ zsm_evict(struct zone_state_manager *state, int zone_to_free) {
 
     struct zn_zone *zone = &state->state[zone_to_free];
     assert(zone->state == ZN_ZONE_FULL);
-
+	
+	// TODO: I think we need to free the invalid queue
+    g_queue_clear(zone->invalid); // This should do it... Right?
     int ret = reset_zone(state, zone);
     if (!ret) {
         g_mutex_unlock(&state->state_mutex);

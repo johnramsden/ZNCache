@@ -59,6 +59,31 @@ struct zone_map_result {
 struct zone_map_result
 zn_cachemap_find(struct zn_cachemap *map, const uint32_t data_id);
 
+/** @brief Begin compaction of a zone. This temporarily renders all chunks in that zone unavailable
+    until the compaction operation is finished, after which zn_cachemap_compact_end should be
+called.
+ *  @param[in] map the cachemap
+ *  @param[in] zone_id the zone that will be compacted
+ *  @param[out] data_ids an out pointer for an array. This outputs the list of data IDs that were associated with the zone.
+ *  @param[out] locations an out pointer for an array. This outputs the list of locations (most importantly are the chunk locations) that were associated with the zone.
+ *  @param[out] count an out pointer for the number of chunks that are still valid in the zone.
+ */
+void
+zn_cachemap_compact_begin(struct zn_cachemap *map, const uint32_t zone_id, uint32_t **data_ids,
+                          struct zn_pair **locations, uint32_t *count);
+
+/** @brief Finish compaction of a zone. This temporarily renders all chunks in that zone unavailable
+    until the compaction operation is finished, after which zn_cachemap_compact_end should be
+called.
+ *  @param[in] map the cachemap
+ *  @param[in] zone_id the zone that was compacted
+ *  @param[in] data_ids An array that stores the list of data IDs that were associated with the zone.
+ *  @param[in] locations An array that stores the list of locations that were associated with the zone.
+ *  @param[in] count the number of chunks that were still valid in the zone.
+ */
+void
+zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const uint32_t* data_ids, struct zn_pair* locations, uint32_t count);
+
 /** @brief Inserts a new mapping into the data structure. Called by
  * the thread when it's finished writing to the zone.
  *

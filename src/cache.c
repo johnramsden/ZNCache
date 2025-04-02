@@ -1,5 +1,6 @@
 // For pread
 #define _XOPEN_SOURCE 500
+#include "cachemap.h"
 #include <unistd.h>
 
 #include "znutil.h"
@@ -224,6 +225,21 @@ zn_destroy_cache(struct zn_cache *cache) {
 
     /* g_mutex_clear(&cache->cache_lock); */
     /* g_mutex_clear(&cache->reader.lock); */
+}
+
+unsigned char *
+zn_read_from_disk_whole(struct zn_cache *cache, uint32_t zone_id, void *buffer) {
+	assert(cache);
+	assert(buffer);
+
+	long write_ptr = CHUNK_POINTER(cache->zone_cap, cache->chunk_sz, 0, zone_id);
+    size_t bytes = pread(cache->fd, buffer, cache->zone_cap, write_ptr);
+    if (bytes != cache->zone_cap) {
+        fprintf(stderr, "Couldn't read from fd\n");
+        return NULL;
+    }
+
+	return buffer;
 }
 
 unsigned char *
