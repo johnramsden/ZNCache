@@ -33,13 +33,11 @@ zn_cachemap_init(struct zn_cachemap *map, const int num_zones, gint *active_read
         thread should signal once it is finished.
  */
 struct zone_map_result {
-    union {
-        struct zn_pair location;
-        GCond *write_finished;
-    } value;
+    struct zn_pair location; ///< If it is finished
+    GCond write_finished; ///< If there is a write ongoing
 
-    enum { RESULT_LOC = 0, RESULT_COND = 1 } type;
-};
+    enum { RESULT_LOC = 0, RESULT_COND = 1, RESULT_EMPTY = 2 } type;
+} __attribute__((aligned(64)));
 
 /** @brief Finds the data in the zone if it exists, otherwise returns additional information for
     writing to a zone
