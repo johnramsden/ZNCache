@@ -118,12 +118,11 @@ zn_cachemap_clear_chunk(struct zn_cachemap *map, struct zn_pair *location) {
     assert(g_hash_table_contains(map->zone_map, GINT_TO_POINTER(data_id)));
     struct zone_map_result *res = g_hash_table_lookup(map->zone_map, GINT_TO_POINTER(data_id));
     assert(res->type == RESULT_LOC);
-    assert(res->value.location.zone == location->zone);
-    assert(res->value.location.chunk_offset == location->chunk_offset);
+    assert(res->location.zone == location->zone);
+    assert(res->location.chunk_offset == location->chunk_offset);
 
     // Erase the entry and free the zone_map_result memory
-    g_hash_table_remove(map->zone_map, GINT_TO_POINTER(data_id));
-    g_free(res);
+    res->type = RESULT_EMPTY;
 
     g_hash_table_remove(map->data_map[location->zone], GUINT_TO_POINTER(location->chunk_offset));
 
@@ -139,7 +138,8 @@ zn_cachemap_clear_zone(struct zn_cachemap *map, uint32_t zone) {
     g_mutex_lock(&map->cache_map_mutex);
 
     GHashTableIter iter;
-    gpointer key, value;
+    gpointer key = NULL;
+    gpointer value = NULL;
 
     g_hash_table_iter_init(&iter, map->data_map[zone]);
     while (g_hash_table_iter_next(&iter, &key, &value)) {
@@ -147,11 +147,9 @@ zn_cachemap_clear_zone(struct zn_cachemap *map, uint32_t zone) {
         assert(g_hash_table_contains(map->zone_map, GINT_TO_POINTER(data_id)));
         struct zone_map_result *res = g_hash_table_lookup(map->zone_map, GINT_TO_POINTER(data_id));
         assert(res->type == RESULT_LOC);
-        assert(res->value.location.zone == zone);
+        assert(res->location.zone == zone);
 
-        // Erase the entry and free the zone_map_result memory
-        g_hash_table_remove(map->zone_map, GINT_TO_POINTER(data_id));
-        g_free(res);
+	res->type = RESULT_EMPTY;
     }
 
     g_hash_table_remove_all(map->data_map[zone]);
