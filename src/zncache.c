@@ -124,6 +124,7 @@ task_function(gpointer data, gpointer user_data) {
         if (print) {
             printf("[%d]:\t(%lu%%)\tze_cache_get(workload[%lu]=%d)\n", thread_data->tid, percent, wi,
 		   thread_data->cache->reader.workload_buffer[wi]);
+            fflush(stdout);
         }
 
         dbg_printf("[%d]: ze_cache_get(workload[%d]=%d)\n", thread_data->tid, wi,
