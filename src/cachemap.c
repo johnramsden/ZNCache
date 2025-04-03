@@ -119,6 +119,8 @@ zn_cachemap_compact_begin(struct zn_cachemap *map, const uint32_t zone_id, uint3
     *count = g_hash_table_size(map->data_map[zone_id]);
     *locations = malloc(sizeof(struct zn_pair) * (*count));
     *data_ids = malloc(sizeof(uint32_t) * (*count));
+    assert(*locations);
+    assert(*data_ids);
 
     // Gather all valid chunks in the zone and temporarily invalidate them
     GHashTableIter iter;
@@ -129,26 +131,27 @@ zn_cachemap_compact_begin(struct zn_cachemap *map, const uint32_t zone_id, uint3
     // Iterate through all valid chunks. Invalid chunks should not be in the data map.
     g_hash_table_iter_init (&iter, map->data_map[zone_id]);
     while (g_hash_table_iter_next (&iter, &key, &value)) {
-	uint32_t chunk_offset = GPOINTER_TO_UINT(key);
+        uint32_t chunk_offset = GPOINTER_TO_UINT(key);
         uint32_t data_id = GPOINTER_TO_UINT(value);
 
-	// Find the entry in the hash table
-	struct zone_map_result* res = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
-	assert(res);
-	assert(res->type == RESULT_LOC);
-	assert(res->value.location.chunk_offset == chunk_offset);
-	assert(res->value.location.id == data_id);
+        // Find the entry in the hash table
+        dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
+        struct zone_map_result* res = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
+        assert(res);
+        assert(res->type == RESULT_LOC);
+        assert(res->value.location.chunk_offset == chunk_offset);
+        assert(res->value.location.id == data_id);
 
-	// Invalidate it, replace with a temporary condition variable
-	res->type = RESULT_COND;
-	res->value.write_finished = g_atomic_rc_box_new(GCond);
-	g_cond_init(res->value.write_finished);
+        // Invalidate it, replace with a temporary condition variable
+        res->type = RESULT_COND;
+        res->value.write_finished = g_atomic_rc_box_new(GCond);
+        g_cond_init(res->value.write_finished);
 
         // Write to the out variables
         (*data_ids)[i] = data_id;
-        (*locations)[i] = (struct zn_pair){.chunk_offset = chunk_offset};
+        (*locations)[i] = (struct zn_pair){.chunk_offset = chunk_offset, .zone = zone_id};
 
-	i += 1;
+        i += 1;
     }
 
     g_mutex_unlock(&map->cache_map_mutex);
@@ -164,9 +167,11 @@ zn_cachemap_insert_nolock(struct zn_cachemap *map, const uint32_t data_id,
     struct zone_map_result *result = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
     assert(result->type == RESULT_COND);
 
+    dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
     GCond *condition = result->value.write_finished;
     result->value.location = location; // Does this mutate the entry in the hash table?
     result->type = RESULT_LOC;
+    dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
     assert(map->data_map[location.zone]);
     g_hash_table_insert(map->data_map[location.zone], GUINT_TO_POINTER(location.chunk_offset), GUINT_TO_POINTER(data_id));
     g_cond_broadcast(condition);            // Wake up threads waiting for it
@@ -191,8 +196,9 @@ zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const u
 
     // Replace with actual locations
     for (uint32_t i = 0; i < count; i++) {
-	assert(zone_id == locations[i].zone);
-	zn_cachemap_insert_nolock(map, data_ids[i], locations[i]);
+        uint32_t zone = locations[i].zone;
+	    assert(zone_id == zone);
+	    zn_cachemap_insert_nolock(map, data_ids[i], locations[i]);
     }
 
     g_mutex_unlock(&map->cache_map_mutex);

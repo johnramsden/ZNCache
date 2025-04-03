@@ -60,6 +60,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
         unsigned char *data = zn_read_from_disk(cache, &result.value.location);
+        result.value.location.id = id;
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_LATENCY, t);

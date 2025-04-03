@@ -39,6 +39,24 @@ print_g_hash_table_zn_pair_node(gpointer key, gpointer value) {
 }
 
 inline static void
+print_g_hash_table_zone_map_result_node(gpointer key, gpointer value) {
+    struct zone_map_result *res = value;
+    if (res) {
+        if (res->type == RESULT_LOC) {
+            struct zn_pair *zp = &res->value.location;
+            printf("[%d: (zone=%u, chunk=%u, id=%u, in_use=%s)], ",
+                   GPOINTER_TO_INT(key), zp->zone, zp->chunk_offset, zp->id, zp->in_use ? "true" : "false");
+        } else if (res->type == RESULT_COND) {
+            printf("[%d: (cond var at %p)], ", GPOINTER_TO_INT(key), (void *)res->value.write_finished);
+        } else {
+            printf("[%d: (unknown type %d)], ", GPOINTER_TO_INT(key), res->type);
+        }
+    } else {
+        printf("[%d: (%s)], ", GPOINTER_TO_INT(key), "NULL");
+    }
+}
+
+inline static void
 print_g_hash_table_g_int(gpointer key, gpointer value) {
     printf("[%d: %d], ", GPOINTER_TO_INT(key), GPOINTER_TO_INT(value));
 }
@@ -61,6 +79,8 @@ print_g_hash_table(char *name, GHashTable *hash_table, enum print_g_hash_table_t
                 print_g_hash_table_zn_pair_node(key, value); break;
             case PRINT_G_HASH_TABLE_PROM_LRU_NODE:
                 print_g_hash_table_prom_lru_node(key, value); break;
+            case PRINT_G_HASH_TABLE_ZONE_MAP_RESULT:
+                print_g_hash_table_zone_map_result_node(key, value); break;
             default:
                 printf("Unimplemented hash table print type"); break;
         }
