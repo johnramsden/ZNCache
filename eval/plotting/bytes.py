@@ -54,6 +54,11 @@ def main():
         action="store_true",
         help="Add regression line to plot."
     )
+    parser.add_argument(
+        "--skipzero",
+        help="Skip zeros.",
+        action='store_true'
+    )
     args = parser.parse_args()
 
     # Split the comma-delimited input file paths and strip extra spaces.

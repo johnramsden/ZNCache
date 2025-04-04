@@ -42,6 +42,11 @@ def main():
         choices=['scatter', 'line'],
         default="scatter"
     )
+    parser.add_argument(
+        "--skipzero",
+        help="Skip zeros.",
+        action='store_true'
+    )
     args = parser.parse_args()
 
     # Split the comma-delimited input file paths and strip extra spaces.
@@ -77,7 +82,7 @@ def main():
                     x_val = float(row[0]) / 60000.0
                     # Scale y-value by dividing by 1,000,000.
                     y_val = float(row[2]) / 1_000_000
-                    if y_val == 0.0:
+                    if args.skipzero and y_val == 0.0:
                         continue
                 except ValueError as e:
                     print(f"Skipping row {row} in file {file}: {e}")
