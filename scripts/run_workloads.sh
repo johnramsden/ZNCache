@@ -107,7 +107,7 @@ for file in "$directory"/*.bin; do
 
     if [ "$device" = "/dev/nvme1n1p1" ]; then
         echo "Pre-conditioning SSD"
-        "${SCRIPT_DIR}/precondition-nvme1n1.sh"
+        "${SCRIPT_DIR}/precondition-nvme1n1.sh" "${n_zones}"
     fi
 
     # shellcheck disable=SC2024
