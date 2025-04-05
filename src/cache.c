@@ -112,7 +112,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, WRITE_GRANULARITY, wp);
+        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, cache->chunk_sz, wp);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
@@ -259,12 +259,17 @@ zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write
     errno = 0;
     while (total_written < to_write) {
         bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start + total_written);
-        fsync(fd);
-        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written,
-        // wp_start+total_written);
         if ((bytes_written == -1) || (errno != 0)) {
             dbg_printf("Error: %s\n", strerror(errno));
             dbg_printf("Couldn't write to fd=%d\n", fd);
+            return -1;
+        }
+        int fsync_ret = fsync(fd);
+        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written,
+        // wp_start+total_written);
+        if ((fsync_ret != 0) || (errno != 0)) {
+            dbg_printf("Error: %s ----------------------------------------------\n", strerror(errno));
+            dbg_printf("Couldn't fsync to fd=%d -------------------------------------------\n", fd);
             return -1;
         }
         total_written += bytes_written;
