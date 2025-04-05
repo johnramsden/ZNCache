@@ -18,7 +18,6 @@
 // #define EVICT_SLEEP_US ((long) (EVICT_SLEEP_SECS * MICROSECS_PER_SECOND)) // Compile-time
 // #define ZE_READ_SLEEP_US ((long) (0.25 * MICROSECS_PER_SECOND)) // Compile-time
 
-#define WRITE_GRANULARITY 4096
 #define MAX_OPEN_ZONES 14
 
 /**

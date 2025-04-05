@@ -258,23 +258,28 @@ zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write
 
     errno = 0;
     while (total_written < to_write) {
-        bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start + total_written);
-        if ((bytes_written == -1) || (errno != 0)) {
+        size_t remaining = to_write - total_written;
+        size_t chunk_size = (remaining < write_size) ? remaining : write_size;
+
+        bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
+        if (bytes_written <= 0) {
             dbg_printf("Error: %s\n", strerror(errno));
-            dbg_printf("Couldn't write to fd=%d\n", fd);
+            dbg_printf("Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
             return -1;
         }
+
         int fsync_ret = fsync(fd);
-        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written,
-        // wp_start+total_written);
         if ((fsync_ret != 0) || (errno != 0)) {
             dbg_printf("Error: %s\n", strerror(errno));
             dbg_printf("Couldn't fsync to fd=%d\n", fd);
             return -1;
         }
+
         total_written += bytes_written;
-        // dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
     }
+
+    assert(total_written == to_write);
+
     return 0;
 }
 
