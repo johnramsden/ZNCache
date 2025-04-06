@@ -231,20 +231,37 @@ zn_destroy_cache(struct zn_cache *cache) {
 
 unsigned char *
 zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
-    unsigned char *data = malloc(cache->chunk_sz);
-    if (data == NULL) {
+    unsigned char *data;
+
+    // Ensure chunk size is aligned
+    if ((cache->chunk_sz % ZN_DIRECT_ALIGNMENT) != 0) {
+        fprintf(stderr, "Error: chunk_sz (%zu) must be multiple of %d for O_DIRECT\n",
+                cache->chunk_sz, ZN_DIRECT_ALIGNMENT);
+        return NULL;
+    }
+
+    // Allocate aligned buffer
+    if (posix_memalign((void **)&data, ZN_DIRECT_ALIGNMENT, cache->chunk_sz) != 0) {
         nomem();
     }
 
+    // Compute aligned offset
     unsigned long long wp =
         CHUNK_POINTER(cache->zone_size, cache->chunk_sz, zone_pair->chunk_offset, zone_pair->zone);
 
-    dbg_printf("[%u,%u] read from write pointer: %llu\n", zone_pair->zone, zone_pair->chunk_offset,
-               wp);
+    if ((wp % ZN_DIRECT_ALIGNMENT) != 0) {
+        fprintf(stderr, "Error: read offset (%llu) not aligned to %d for O_DIRECT\n",
+                wp, ZN_DIRECT_ALIGNMENT);
+        free(data);
+        return NULL;
+    }
 
-    size_t b = pread(cache->fd, data, cache->chunk_sz, wp);
-    if (b != cache->chunk_sz) {
-        fprintf(stderr, "Couldn't read from fd\n");
+    dbg_printf("[%u,%u] read from write pointer: %llu\n",
+               zone_pair->zone, zone_pair->chunk_offset, wp);
+
+    ssize_t b = pread(cache->fd, data, cache->chunk_sz, wp);
+    if (b != (ssize_t)cache->chunk_sz) {
+        fprintf(stderr, "Couldn't read from fd: %s\n", strerror(errno));
         free(data);
         return NULL;
     }
