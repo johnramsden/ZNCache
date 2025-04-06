@@ -6,12 +6,14 @@
 #include "zncache.h"
 #include "znprofiler.h"
 
-
+#include <stdlib.h>
 #include <assert.h>
 #include <linux/fs.h>
 
 #include "libzbd/zbd.h"
 #include <inttypes.h>
+
+#define ZN_DIRECT_ALIGNMENT 4096
 
 void
 zn_fg_evict(struct zn_cache *cache) {
@@ -262,18 +264,18 @@ zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write
         size_t chunk_size = (remaining < write_size) ? remaining : write_size;
 
         bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
-        if (bytes_written <= 0) {
+        if (bytes_written <= 0 || (errno != 0)) {
             dbg_printf("Error: %s\n", strerror(errno));
             dbg_printf("Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
             return -1;
         }
 
-        int fsync_ret = fsync(fd);
-        if ((fsync_ret != 0) || (errno != 0)) {
-            dbg_printf("Error: %s\n", strerror(errno));
-            dbg_printf("Couldn't fsync to fd=%d\n", fd);
-            return -1;
-        }
+        // int fsync_ret = fsync(fd);
+        // if ((fsync_ret != 0) || (errno != 0)) {
+        //     printf("Error: %s\n", strerror(errno));
+        //     printf("Couldn't fsync to fd=%d\n", fd);
+        //     return -1;
+        // }
 
         total_written += bytes_written;
     }
@@ -285,13 +287,13 @@ zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write
 
 unsigned char *
 zn_gen_write_buffer(struct zn_cache *cache, uint32_t zone_id, unsigned char *buffer) {
-    unsigned char *data = malloc(cache->chunk_sz);
-    if (data == NULL) {
+    unsigned char *data;
+
+    if (posix_memalign((void **)&data, ZN_DIRECT_ALIGNMENT, cache->chunk_sz) != 0) {
         nomem();
     }
 
     memcpy(data, buffer, cache->chunk_sz);
-    // Metadata
     memcpy(data, &zone_id, sizeof(uint32_t));
 
     g_usleep(ZN_READ_SLEEP_US);

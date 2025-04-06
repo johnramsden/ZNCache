@@ -1,6 +1,7 @@
 // For pread
 #include <bits/posix1_lim.h>
 #define _XOPEN_SOURCE 500
+#define _GNU_SOURCE
 #include <string.h>
 #include "zncache.h"
 
@@ -355,9 +356,9 @@ main(int argc, char **argv) {
     struct zbd_info info = {0};
     int fd;
     if (device_type == ZE_BACKEND_ZNS) {
-        fd = zbd_open(device, O_RDWR, &info);
+        fd = zbd_open(device, O_RDWR | O_DIRECT, &info);
     } else {
-        fd = open(device, O_RDWR);
+        fd = open(device, O_RDWR | O_DIRECT);
 
         uint64_t size = 0;
         if (ioctl(fd, BLKGETSIZE64, &size) == -1) {
@@ -418,6 +419,7 @@ main(int argc, char **argv) {
 
     // Push tasks to the thread pool
     struct zn_thread_data *thread_data = g_new(struct zn_thread_data, nr_threads);
+    assert(thread_data != NULL);
     // Setup mainloop to iterate context for profiling triggers
     GMainLoop *loop = g_main_loop_new(NULL, FALSE);
 
