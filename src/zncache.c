@@ -252,7 +252,7 @@ read_workload(int fd, uint32_t *buffer, size_t size) {
 
 int
 main(int argc, char **argv) {
-    zbd_set_log_level(ZBD_LOG_ERROR);
+    zbd_set_log_level(ZBD_LOG_DEBUG);
 
     if (geteuid() != 0) {
         fprintf(stderr, "Please run as root\n");
@@ -356,9 +356,9 @@ main(int argc, char **argv) {
     struct zbd_info info = {0};
     int fd;
     if (device_type == ZE_BACKEND_ZNS) {
-        fd = zbd_open(device, O_RDWR | O_DIRECT, &info);
+        fd = zbd_open(device, O_RDWR | O_DIRECT | O_SYNC, &info);
     } else {
-        fd = open(device, O_RDWR | O_DIRECT);
+        fd = open(device, O_RDWR | O_DIRECT | O_SYNC);
 
         uint64_t size = 0;
         if (ioctl(fd, BLKGETSIZE64, &size) == -1) {

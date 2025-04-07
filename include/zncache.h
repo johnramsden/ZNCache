@@ -20,6 +20,8 @@
 
 #define MAX_OPEN_ZONES 14
 
+#define ZN_WRITE_GRANULARITY 1048576 // 1MB
+
 /**
  * @struct zn_reader
  * @brief Manages concurrent read operations within the cache.
@@ -148,8 +150,8 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair);
  * @note Be careful write size is not too large otherwise you can get errors
  */
 int
-zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write_size,
-             unsigned long long wp_start);
+zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
+             unsigned long long wp_start, enum zn_backend backend);
 
 /**
  * Allocate a buffer prefixed by `zone_id`, with the rest being `RANDOM_DATA`
@@ -175,7 +177,7 @@ zn_validate_read(struct zn_cache *cache, unsigned char *data, uint32_t id, unsig
 
 /**
  * Get the cache hitratio
- * 
+ *
  * @param cache Pointer to the `zn_cache` structure.
  * @return Cache hit ratio
  */

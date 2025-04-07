@@ -1,5 +1,6 @@
 // For pread
 #define _XOPEN_SOURCE 500
+#include <stdint.h>
 #include <unistd.h>
 
 #include "znutil.h"
@@ -46,6 +47,22 @@ zn_fg_evict(struct zn_cache *cache) {
     }
 }
 
+static int
+zn_get_wp(int fd, off_t zone_off, unsigned long long *wp) {
+    struct zbd_zone zone;
+
+    unsigned int nr_zones = 1;
+    int ret = zbd_report_zones(fd, zone_off, 1, ZBD_RO_ALL, &zone, &nr_zones);
+
+    if (ret != 0 || nr_zones == 0) {
+        return -1;
+    }
+
+    *wp = zone.wp;
+    return 0;
+}
+
+
 unsigned char *
 zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_buffer) {
     unsigned char *data = NULL;
@@ -89,11 +106,13 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         // Repeatedly attempt to get an active zone. This function can fail when there all active
         // zones are writing, so put this into a while loop.
         struct zn_pair location;
+	int attempts = 0;
         while (true) {
 
             enum zsm_get_active_zone_error ret = zsm_get_active_zone(&cache->zone_state, &location);
 
             if (ret == ZSM_GET_ACTIVE_ZONE_RETRY) {
+                attempts++;
                 g_thread_yield();
             } else if (ret == ZSM_GET_ACTIVE_ZONE_ERROR) {
                 goto UNDO_MAP;
@@ -112,9 +131,19 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         unsigned long long wp =
             CHUNK_POINTER(cache->zone_size, cache->chunk_sz, location.chunk_offset, location.zone);
 
+        int ret;
+        if (cache->backend == ZE_BACKEND_ZNS) {
+            unsigned long long wp_bytes;
+            ret = zn_get_wp(cache->fd, location.zone*cache->zone_cap, &wp_bytes);
+            if (ret != 0 || wp_bytes != wp) {
+                fprintf(stderr, "Error (%d): wp_bytes (%llu) != wp (%llu), zone=%u, chunk=%u\n", ret, wp_bytes, wp, location.zone, location.chunk_offset);
+                assert(!"wp_bytes != wp");
+            }
+        }
+
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, cache->chunk_sz, wp);
+        ret = zn_write_out(cache->fd, cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp, cache->backend);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
@@ -269,30 +298,41 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
     return data;
 }
 
+#define MAX_RETRY 10
+
 int
-zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write_size,
-             unsigned long long wp_start) {
+zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
+             unsigned long long wp_start, enum zn_backend backend) {
     ssize_t bytes_written;
     size_t total_written = 0;
 
+    uint32_t retrys = 0;
+
     errno = 0;
     while (total_written < to_write) {
-        size_t remaining = to_write - total_written;
+        ssize_t remaining = to_write - total_written;
         size_t chunk_size = (remaining < write_size) ? remaining : write_size;
 
         bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
-        if (bytes_written <= 0 || (errno != 0)) {
-            dbg_printf("Error: %s\n", strerror(errno));
-            dbg_printf("Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
-            return -1;
-        }
 
-        // int fsync_ret = fsync(fd);
-        // if ((fsync_ret != 0) || (errno != 0)) {
-        //     printf("Error: %s\n", strerror(errno));
-        //     printf("Couldn't fsync to fd=%d\n", fd);
-        //     return -1;
-        // }
+        if (bytes_written <= 0 || (errno != 0)) {
+            fprintf(stderr,"Error: %s\n", strerror(errno));
+            fprintf(stderr, "Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
+            if (backend == ZE_BACKEND_ZNS) {
+                unsigned long long wp;
+                int ret = zn_get_wp(fd, wp_start, &wp);
+                if (ret != 0) {
+                    assert(!"Error getting wp");
+                }
+                total_written = wp - wp_start;
+            }
+            retrys++;
+            if (retrys > MAX_RETRY) {
+                assert(!"Max retries exceeded");
+            }
+            errno = 0;
+            continue;
+        }
 
         total_written += bytes_written;
     }
