@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <assert.h>
 #include <libzbd/zbd.h>
 #include <stdbool.h>
@@ -33,7 +34,7 @@ setup_dev(char *device, struct zn_cache *cfg) {
     int fd;
     enum zn_backend backend = zbd_device_is_zoned(device) ? ZE_BACKEND_ZNS : ZE_BACKEND_BLOCK;
     if (backend == ZE_BACKEND_ZNS) {
-        fd = zbd_open(device, O_RDWR, &info);
+        fd = zbd_open(device, O_RDWR | O_DIRECT | O_SYNC, &info);
         if (fd < 0) {
             fprintf(stderr, "Error opening device: %s\n", device);
             return fd;
