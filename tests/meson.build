@@ -13,7 +13,7 @@ test_cflags = [
     '-DEVICT_LOW_THRESH_CHUNKS=' + EVICT_LOW_THRESH_CHUNKS.to_string(),
     '-DEVICT_INTERVAL_US=' + EVICT_INTERVAL_US.to_string(),
     '-DMAX_ZONES_USED=' + MAX_ZONES_USED.to_string(),
-    '-D_POSIX_C_SOURCE=199309L', # CLOCK_MONO
+    '-D_POSIX_C_SOURCE=200112L', # CLOCK_MONO
 ]
 
 foreach test_name : project_tests

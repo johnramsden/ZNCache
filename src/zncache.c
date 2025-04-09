@@ -1,6 +1,7 @@
 // For pread
 #include <bits/posix1_lim.h>
 #define _XOPEN_SOURCE 500
+#define _GNU_SOURCE
 #include <string.h>
 #include "zncache.h"
 
@@ -124,6 +125,7 @@ task_function(gpointer data, gpointer user_data) {
         if (print) {
             printf("[%d]:\t(%lu%%)\tze_cache_get(workload[%lu]=%d)\n", thread_data->tid, percent, wi,
 		   thread_data->cache->reader.workload_buffer[wi]);
+            fflush(stdout);
         }
 
         dbg_printf("[%d]: ze_cache_get(workload[%d]=%d)\n", thread_data->tid, wi,
@@ -250,7 +252,7 @@ read_workload(int fd, uint32_t *buffer, size_t size) {
 
 int
 main(int argc, char **argv) {
-    zbd_set_log_level(ZBD_LOG_ERROR);
+    zbd_set_log_level(ZBD_LOG_DEBUG);
 
     if (geteuid() != 0) {
         fprintf(stderr, "Please run as root\n");
@@ -354,9 +356,9 @@ main(int argc, char **argv) {
     struct zbd_info info = {0};
     int fd;
     if (device_type == ZE_BACKEND_ZNS) {
-        fd = zbd_open(device, O_RDWR, &info);
+        fd = zbd_open(device, O_RDWR | O_DIRECT | O_SYNC, &info);
     } else {
-        fd = open(device, O_RDWR);
+        fd = open(device, O_RDWR | O_DIRECT | O_SYNC);
 
         uint64_t size = 0;
         if (ioctl(fd, BLKGETSIZE64, &size) == -1) {
@@ -417,6 +419,7 @@ main(int argc, char **argv) {
 
     // Push tasks to the thread pool
     struct zn_thread_data *thread_data = g_new(struct zn_thread_data, nr_threads);
+    assert(thread_data != NULL);
     // Setup mainloop to iterate context for profiling triggers
     GMainLoop *loop = g_main_loop_new(NULL, FALSE);
 

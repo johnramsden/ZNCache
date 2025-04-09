@@ -113,7 +113,7 @@ zn_policy_compact_zone(struct zn_policy_chunk *p, struct eviction_policy_chunk_z
 	// Write to the ith sequential chunk
 	unsigned long long wp =
 	    CHUNK_POINTER(p->cache->zone_cap, p->cache->chunk_sz, i, locations[i].zone);
-	if (zn_write_out(p->cache->fd, p->cache->chunk_sz, read_ptr, WRITE_GRANULARITY, wp) != 0) {
+	if (zn_write_out(p->cache->fd, p->cache->chunk_sz, read_ptr, ZN_WRITE_GRANULARITY, wp, p->cache->backend) != 0) {
             dbg_printf("Couldn't write to fd at wp=%llu\n", wp);
         }
     }
@@ -176,7 +176,7 @@ zn_policy_chunk_gc(policy_data_t policy) {
             // Write the chunk to the new zone
             unsigned long long wp = CHUNK_POINTER(p->cache->zone_size, p->cache->chunk_sz,
                                                   new_location.chunk_offset, new_location.zone);
-            if (zn_write_out(p->cache->fd, p->cache->chunk_sz, data, WRITE_GRANULARITY, wp) != 0) {
+            if (zn_write_out(p->cache->fd, p->cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp, p->cache->backend) != 0) {
                 assert(!"Failed to write chunk to new zone");
             }
 

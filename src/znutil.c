@@ -43,11 +43,11 @@ print_g_hash_table_zone_map_result_node(gpointer key, gpointer value) {
     struct zone_map_result *res = value;
     if (res) {
         if (res->type == RESULT_LOC) {
-            struct zn_pair *zp = &res->value.location;
+            struct zn_pair *zp = &res->location;
             printf("[%d: (zone=%u, chunk=%u, id=%u, in_use=%s)], ",
                    GPOINTER_TO_INT(key), zp->zone, zp->chunk_offset, zp->id, zp->in_use ? "true" : "false");
         } else if (res->type == RESULT_COND) {
-            printf("[%d: (cond var at %p)], ", GPOINTER_TO_INT(key), (void *)res->value.write_finished);
+            printf("[%d: (cond var at %p)], ", GPOINTER_TO_INT(key), (void *)&res->write_finished);
         } else {
             printf("[%d: (unknown type %d)], ", GPOINTER_TO_INT(key), res->type);
         }

@@ -25,7 +25,7 @@ close_zone(struct zone_state_manager *state, struct zn_zone *zone) {
 
     unsigned long long wp = CHUNK_POINTER(state->zone_size, state->chunk_size, 0, zone->zone_id);
     dbg_printf("Closing zone %u, zone pointer %llu\n", zone->zone_id, wp);
-    zbd_set_log_level(ZBD_LOG_ERROR);
+    zbd_set_log_level(ZBD_LOG_DEBUG);
 
     // FOR DEBUGGING ZONE STATE
     // struct zbd_zone zone;
@@ -72,7 +72,7 @@ reset_zone(struct zone_state_manager *state, struct zn_zone *zone) {
 
     unsigned long long wp = CHUNK_POINTER(state->zone_size, state->chunk_size, 0, zone->zone_id);
     dbg_printf("Resetting zone %u, zone pointer %llu\n", zone->zone_id, wp);
-    zbd_set_log_level(ZBD_LOG_ERROR);
+    zbd_set_log_level(ZBD_LOG_DEBUG);
 
     int ret = 0;
     if (state->backend_type == ZE_BACKEND_ZNS) {
@@ -199,6 +199,7 @@ zsm_get_active_zone(struct zone_state_manager *state, struct zn_pair *pair) {
             int ret = open_zone(state, new_zone);
             if (ret) {
                 dbg_printf("Failed to open zone: %d with error: %d\n", new_zone->zone_id, ret);
+                assert(!"Failed to open zone");
                 g_mutex_unlock(&state->state_mutex);
                 return ZSM_GET_ACTIVE_ZONE_ERROR;
             }

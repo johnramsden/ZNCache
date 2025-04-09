@@ -1,18 +1,21 @@
 // For pread
 #define _XOPEN_SOURCE 500
 #include "cachemap.h"
+#include <stdint.h>
 #include <unistd.h>
 
 #include "znutil.h"
 #include "zncache.h"
 #include "znprofiler.h"
 
-
+#include <stdlib.h>
 #include <assert.h>
 #include <linux/fs.h>
 
 #include "libzbd/zbd.h"
 #include <inttypes.h>
+
+#define ZN_DIRECT_ALIGNMENT 4096
 
 void
 zn_fg_evict(struct zn_cache *cache) {
@@ -45,6 +48,22 @@ zn_fg_evict(struct zn_cache *cache) {
     }
 }
 
+static int
+zn_get_wp(int fd, off_t zone_off, unsigned long long *wp) {
+    struct zbd_zone zone;
+
+    unsigned int nr_zones = 1;
+    int ret = zbd_report_zones(fd, zone_off, 1, ZBD_RO_ALL, &zone, &nr_zones);
+
+    if (ret != 0 || nr_zones == 0) {
+        return -1;
+    }
+
+    *wp = zone.wp;
+    return 0;
+}
+
+
 unsigned char *
 zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_buffer) {
     unsigned char *data = NULL;
@@ -54,23 +73,24 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
     TIME_NOW(&total_start_time);
 
     struct zone_map_result result = zn_cachemap_find(&cache->cache_map, id);
+    assert(result.type != RESULT_EMPTY);
 
     // Found the entry, read it from disk, update eviction, and decrement reader.
     if (result.type == RESULT_LOC) {
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        unsigned char *data = zn_read_from_disk(cache, &result.value.location);
-        result.value.location.id = id;
+        unsigned char *data = zn_read_from_disk(cache, &result.location);
+        result.location.id = id;
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_LATENCY, t);
         ZN_PROFILER_PRINTF(cache->profiler, "READLATENCY_EVERY,%f\n", t);
 
-        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.value.location,
+        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.location,
                                              ZN_READ);
 
         // Sadly, we have to remember to decrement the reader count here
-        g_atomic_int_dec_and_test(&cache->active_readers[result.value.location.zone]);
+        g_atomic_int_dec_and_test(&cache->active_readers[result.location.zone]);
 
         g_mutex_lock(&cache->ratio.lock);
         cache->ratio.hits++;
@@ -88,11 +108,13 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         // Repeatedly attempt to get an active zone. This function can fail when there all active
         // zones are writing, so put this into a while loop.
         struct zn_pair location;
+	int attempts = 0;
         while (true) {
 
             enum zsm_get_active_zone_error ret = zsm_get_active_zone(&cache->zone_state, &location);
 
             if (ret == ZSM_GET_ACTIVE_ZONE_RETRY) {
+                attempts++;
                 g_thread_yield();
             } else if (ret == ZSM_GET_ACTIVE_ZONE_ERROR) {
                 goto UNDO_MAP;
@@ -111,9 +133,19 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         unsigned long long wp =
             CHUNK_POINTER(cache->zone_size, cache->chunk_sz, location.chunk_offset, location.zone);
 
+        int ret;
+        if (cache->backend == ZE_BACKEND_ZNS) {
+            unsigned long long wp_bytes;
+            ret = zn_get_wp(cache->fd, location.zone*cache->zone_cap, &wp_bytes);
+            if (ret != 0 || wp_bytes != wp) {
+                fprintf(stderr, "Error (%d): wp_bytes (%llu) != wp (%llu), zone=%u, chunk=%u\n", ret, wp_bytes, wp, location.zone, location.chunk_offset);
+                assert(!"wp_bytes != wp");
+            }
+        }
+
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, WRITE_GRANULARITY, wp);
+        ret = zn_write_out(cache->fd, cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp, cache->backend);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
@@ -245,20 +277,37 @@ zn_read_from_disk_whole(struct zn_cache *cache, uint32_t zone_id, void *buffer) 
 
 unsigned char *
 zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
-    unsigned char *data = malloc(cache->chunk_sz);
-    if (data == NULL) {
+    unsigned char *data;
+
+    // Ensure chunk size is aligned
+    if ((cache->chunk_sz % ZN_DIRECT_ALIGNMENT) != 0) {
+        fprintf(stderr, "Error: chunk_sz (%zu) must be multiple of %d for O_DIRECT\n",
+                cache->chunk_sz, ZN_DIRECT_ALIGNMENT);
+        return NULL;
+    }
+
+    // Allocate aligned buffer
+    if (posix_memalign((void **)&data, ZN_DIRECT_ALIGNMENT, cache->chunk_sz) != 0) {
         nomem();
     }
 
+    // Compute aligned offset
     unsigned long long wp =
         CHUNK_POINTER(cache->zone_size, cache->chunk_sz, zone_pair->chunk_offset, zone_pair->zone);
 
-    dbg_printf("[%u,%u] read from write pointer: %llu\n", zone_pair->zone, zone_pair->chunk_offset,
-               wp);
+    if ((wp % ZN_DIRECT_ALIGNMENT) != 0) {
+        fprintf(stderr, "Error: read offset (%llu) not aligned to %d for O_DIRECT\n",
+                wp, ZN_DIRECT_ALIGNMENT);
+        free(data);
+        return NULL;
+    }
 
-    size_t b = pread(cache->fd, data, cache->chunk_sz, wp);
-    if (b != cache->chunk_sz) {
-        fprintf(stderr, "Couldn't read from fd\n");
+    dbg_printf("[%u,%u] read from write pointer: %llu\n",
+               zone_pair->zone, zone_pair->chunk_offset, wp);
+
+    ssize_t b = pread(cache->fd, data, cache->chunk_sz, wp);
+    if (b != (ssize_t)cache->chunk_sz) {
+        fprintf(stderr, "Couldn't read from fd: %s\n", strerror(errno));
         free(data);
         return NULL;
     }
@@ -266,38 +315,59 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
     return data;
 }
 
+#define MAX_RETRY 10
+
 int
-zn_write_out(int fd, size_t to_write, const unsigned char *buffer, ssize_t write_size,
-             unsigned long long wp_start) {
+zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
+             unsigned long long wp_start, enum zn_backend backend) {
     ssize_t bytes_written;
     size_t total_written = 0;
 
+    uint32_t retrys = 0;
+
     errno = 0;
     while (total_written < to_write) {
-        bytes_written = pwrite(fd, buffer + total_written, write_size, wp_start + total_written);
-        fsync(fd);
-        // dbg_printf("Wrote %ld bytes to fd at offset=%llu\n", bytes_written,
-        // wp_start+total_written);
-        if ((bytes_written == -1) || (errno != 0)) {
-            dbg_printf("Error: %s\n", strerror(errno));
-            dbg_printf("Couldn't write to fd=%d\n", fd);
-            return -1;
+        ssize_t remaining = to_write - total_written;
+        size_t chunk_size = (remaining < write_size) ? remaining : write_size;
+
+        bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
+
+        if (bytes_written <= 0 || (errno != 0)) {
+            fprintf(stderr,"Error: %s\n", strerror(errno));
+            fprintf(stderr, "Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
+            if (backend == ZE_BACKEND_ZNS) {
+                unsigned long long wp;
+                int ret = zn_get_wp(fd, wp_start, &wp);
+                if (ret != 0) {
+                    assert(!"Error getting wp");
+                }
+                total_written = wp - wp_start;
+            }
+            retrys++;
+            if (retrys > MAX_RETRY) {
+                assert(!"Max retries exceeded");
+            }
+            errno = 0;
+            continue;
         }
+
         total_written += bytes_written;
-        // dbg_printf("total_written=%ld bytes of %zu\n", total_written, to_write);
     }
+
+    assert(total_written == to_write);
+
     return 0;
 }
 
 unsigned char *
 zn_gen_write_buffer(struct zn_cache *cache, uint32_t zone_id, unsigned char *buffer) {
-    unsigned char *data = malloc(cache->chunk_sz);
-    if (data == NULL) {
+    unsigned char *data;
+
+    if (posix_memalign((void **)&data, ZN_DIRECT_ALIGNMENT, cache->chunk_sz) != 0) {
         nomem();
     }
 
     memcpy(data, buffer, cache->chunk_sz);
-    // Metadata
     memcpy(data, &zone_id, sizeof(uint32_t));
 
     g_usleep(ZN_READ_SLEEP_US);

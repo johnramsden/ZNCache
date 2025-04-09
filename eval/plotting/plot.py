@@ -42,6 +42,11 @@ def main():
         action="store_true",
         help="Add regression line to plot."
     )
+    parser.add_argument(
+        "--skipzero",
+        help="Skip zeros.",
+        action='store_true'
+    )
     args = parser.parse_args()
 
     # Split the comma-delimited file paths and strip extra spaces.
@@ -74,7 +79,7 @@ def main():
                     # Convert time from ms to minutes.
                     x_val = float(row[0]) / 60000.0
                     y_val = float(row[2])
-                    if y_val == 0.0:
+                    if args.skipzero and y_val == 0.0:
                         continue
                 except ValueError as e:
                     print(f"Skipping row {row} in file {file}: {e}")
