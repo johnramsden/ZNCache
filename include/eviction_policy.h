@@ -9,13 +9,6 @@ struct zn_cache;
 
 #include <stdint.h>
 
-// TODO: Probably compile-time
-#define EVICT_HIGH_THRESH_ZONES 2
-#define EVICT_LOW_THRESH_ZONES 4
-
-#define EVICT_HIGH_THRESH_CHUNKS 6
-#define EVICT_LOW_THRESH_CHUNKS 12
-
 /**
  * @enum zn_io_type
  * @brief Defines the type of IO done
