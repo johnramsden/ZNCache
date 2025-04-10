@@ -84,11 +84,11 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_READ_LATENCY, t);
         ZN_PROFILER_PRINTF(cache->profiler, "READLATENCY_EVERY,%f\n", t);
 
-        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.location,
-                                             ZN_READ);
-
         // Sadly, we have to remember to decrement the reader count here
         g_atomic_int_dec_and_test(&cache->active_readers[result.location.zone]);
+
+        cache->eviction_policy.update_policy(cache->eviction_policy.data, result.location,
+                                             ZN_READ);
 
         g_mutex_lock(&cache->ratio.lock);
         cache->ratio.hits++;
@@ -159,6 +159,8 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         g_mutex_unlock(&cache->ratio.lock);
 
         // Update metadata
+        location.id = id;
+        location.in_use = true;
         zsm_return_active_zone(&cache->zone_state, &location);
 
         cache->eviction_policy.update_policy(cache->eviction_policy.data, location, ZN_WRITE);

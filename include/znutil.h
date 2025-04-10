@@ -22,6 +22,8 @@
 #define CHUNK_POINTER(z_sz, c_sz, c_num, z_num)                                                    \
     (((uint64_t) (z_sz) * (uint64_t) (z_num)) + ((uint64_t) (c_num) * (uint64_t) (c_sz)))
 
+#define TRAP_HERE do {__asm__ volatile("int3");} while(0)
+
 enum print_g_queue_type {
     PRINT_G_QUEUE_GINT = 0,
     PRINT_G_QUEUE_ZN_ZONE = 1,

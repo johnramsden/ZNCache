@@ -144,6 +144,7 @@ zsm_init(struct zone_state_manager *state, const uint32_t num_zones, const int f
     state->writes_occurring = 0;
     state->num_zones = num_zones;
     state->backend_type = backend_type;
+    state->free_chunks = num_zones * state->max_zone_chunks;
 
     g_mutex_init(&state->state_mutex);
 
@@ -261,6 +262,7 @@ zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t
     g_queue_clear(zone->invalid);
 
     state->writes_occurring++;
+    state->free_chunks -= (state->max_zone_chunks - (count - 1));
 
     g_mutex_unlock(&state->state_mutex);
 }
@@ -280,6 +282,7 @@ zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair) {
 
     // Update the state of the chunk
     state->writes_occurring--;
+    state->free_chunks += 1;
     zone->chunk_offset++;
     if (zone->chunk_offset == state->max_zone_chunks) {
         int ret = close_zone(state, zone);
@@ -317,6 +320,7 @@ zsm_evict(struct zone_state_manager *state, int zone_to_free) {
     assert(zone->state == ZN_ZONE_FREE);
 
     g_queue_clear(state->state[zone_to_free].invalid);
+    state->free_chunks += state->max_zone_chunks;
 
     g_mutex_unlock(&state->state_mutex);
     return 0;
@@ -372,6 +376,17 @@ zsm_get_num_full_zones(struct zone_state_manager *state) {
 
     return count;
 }
+
+uint64_t
+zsm_get_num_free_chunks(struct zone_state_manager *state) {
+
+    g_mutex_lock(&state->state_mutex);
+    uint64_t count = state->free_chunks;
+    g_mutex_unlock(&state->state_mutex);
+
+    return count;
+}
+
 
 uint32_t
 zsm_get_num_invalid_chunks(struct zone_state_manager *state, uint32_t zone) {

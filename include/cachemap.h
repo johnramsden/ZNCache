@@ -97,6 +97,35 @@ zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const u
 void
 zn_cachemap_insert(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
 
+/** @brief Inserts a new mapping into the data structure only if there
+    doesn't already exist an entry, and returns the entry that will
+    exist in the map after this function returns.
+ *
+ * @param data_id id of the data to be inserted
+ * @param location the location on disk where the data lives
+ * @return the entry that will exist in the map
+ *
+ * Implementation notes:
+ * We need this because we can run into a situation where we remove
+   something and need to insert it later on. During that time another
+   thread could have inserted a different value.
+ */
+struct zn_pair
+zn_cachemap_atomic_set(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
+
+/** @brief Atomically replaces an existing mapping. The data must have
+    been inserted into the map prior to this and exist as a
+    mapping. It cannot be a data ID that is empty, has not been seen
+    before or is currently in the process of being written.
+ *
+ * @param data_id id of the data to be inserted
+ * @param location the location on disk where the data lives
+ * @return the entry that exists in the map. If it doesn't exist, the in_use field will be set to false.
+ *
+ */
+struct zn_pair
+zn_cachemap_atomic_replace(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
+
 /** @brief Clears all entries of a zone in the mapping. Called by eviction threads.
  * @param zone the zone
    to clear

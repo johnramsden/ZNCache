@@ -52,6 +52,7 @@ struct zone_state_manager {
     GQueue *free;       /**< The queue of zones that are free. Stores pointers to zn_zones. */
     struct zn_zone *state; /**< An array that stores the state of each zone, and acts as the backing
     memory for the active and free queues. */
+    uint64_t free_chunks; /**< The number of free chunks currently available */
     int writes_occurring;  /**< The current number of writes occuring on active zones */
 
     // Information about the cache
@@ -59,10 +60,10 @@ struct zone_state_manager {
     uint64_t zone_cap;            /**< Maximum storage capacity per zone in bytes. */
     uint64_t zone_size;           /**< Storage size per zone in bytes. */
     size_t chunk_size;            /**< Size of each chunk in bytes. */
-    uint32_t max_nr_active_zones; /**< Maximum number of zones that can be active at once. */
     uint64_t max_zone_chunks;     /**< Maximum amount of chunks that a zone can store */
+    uint32_t max_nr_active_zones; /**< Maximum number of zones that can be active at once. */
     uint32_t num_zones;           /**< Number of zones */
-	enum zn_backend backend_type; /**< The type of backend */
+    enum zn_backend backend_type; /**< The type of backend */
 };
 
 /**
@@ -148,6 +149,9 @@ zsm_get_num_full_zones(struct zone_state_manager *state);
 /** @brief Mark a chunk as invalid */
 void
 zsm_mark_chunk_invalid(struct zone_state_manager *state, struct zn_pair *location);
+
+uint64_t
+zsm_get_num_free_chunks(struct zone_state_manager *state);
 
 /** @brief Returns invalid chunks in a zone */
 uint32_t

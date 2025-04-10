@@ -1,6 +1,7 @@
 #include "cachemap.h"
 #include "eviction_policy.h"
 #include "eviction_policy_chunk.h"
+#include "znbackend.h"
 #include "zncache.h"
 #include "znutil.h"
 #include "minheap.h"
@@ -57,17 +58,14 @@ zn_policy_chunk_update(policy_data_t _policy, struct zn_pair location,
     } else if (io_type == ZN_READ) {
 
         if (node) {
-			gpointer data = node->data;
-			g_queue_delete_link(&p->lru_queue, node);
-			g_queue_push_tail(&p->lru_queue, data);
-			GList *new_node = g_queue_peek_tail_link(&p->lru_queue);
-			g_hash_table_replace(p->chunk_to_lru_map, zp, new_node);
+	    gpointer data = node->data;
+	    g_queue_delete_link(&p->lru_queue, node);
+	    g_queue_push_tail(&p->lru_queue, data);
+	    GList *new_node = g_queue_peek_tail_link(&p->lru_queue);
+	    g_hash_table_replace(p->chunk_to_lru_map, zp, new_node);
         }
 
-        // If node->data == NULL, the zone is not in the LRU queue. This
-        // means that the zone is either not full, or has been removed
-        // by the eviction thread while the read occurred. Don't do
-        // anything
+        // If node->data == NULL, the chunk is not in the LRU queue.
     }
 
 
@@ -79,8 +77,20 @@ zn_policy_chunk_update(policy_data_t _policy, struct zn_pair location,
     g_mutex_unlock(&p->policy_mutex);
 }
 
+static gint
+sort_locs(gconstpointer a, gconstpointer b, gpointer user_data) {
+    (void) user_data;
+    const struct zn_pair * loc_a = a;
+    const struct zn_pair * loc_b = b;
+    if (loc_a->chunk_offset < loc_b->chunk_offset) {
+        return -1;
+    } else {
+	return 1;   
+    }
+}
+
 /** @brief This function takes a full zone containing invalid chunks,
-    and compacts it so that only valid chunks remain.
+    and compacts it in-place so that only valid chunks remain.
  *
  * At a high level, this function copies all data from the zone,
    removes all invalid chunks, and makes the zone available again as
@@ -98,6 +108,19 @@ zn_policy_compact_zone(struct zn_policy_chunk *p, struct eviction_policy_chunk_z
 
     // Get information about the valid chunks
     zn_cachemap_compact_begin(&p->cache->cache_map, old_zone->zone_id, &data_ids, &locations, &count);
+    
+    // This is an annoying hack but we need to sort the locations and
+    // data IDs by increasing chunk offsets. This is because we are
+    // moving memory of chunks with later offsets into memory
+    // locations of chunks with earlier offsets, so if we didn't sort,
+    // we could be overwriting earlier chunks that appear later in the
+    // locations array. Wirth sorting, on each iteration of the array
+    // the new location is guaranteed to be smaller than the old
+    // location so it will work properly
+    for (uint32_t i = 0; i < count; i++) {
+        locations[i].id = data_ids[i];
+    }
+    g_sort_array(locations, count, sizeof(struct zn_pair), sort_locs, NULL);
 
     // Wait for all readers to finish
     while (g_atomic_int_get(&p->cache->active_readers[old_zone->zone_id]) > 0) {}
@@ -105,17 +128,72 @@ zn_policy_compact_zone(struct zn_policy_chunk *p, struct eviction_policy_chunk_z
     // Reset the current zone, making it writeable again
     zsm_evict_and_write(&p->cache->zone_state, old_zone->zone_id, count);
 
-    // Copy all the old zones
+    struct eviction_policy_chunk_zone *zpc = &p->zone_pool[old_zone->zone_id];
+    zpc->chunks_in_use = 0;
+    zpc->filled = false;
+    zpc->pqueue_entry = NULL; // We won't be full
+
+    // Each iteration of this loop will write a chunk from the old
+    // offset into the ith offset, compressing the data in the zone.
     for (uint32_t i = 0; i < count; i++) {
-	// Read from the correct chunk offset indicated by the location
-	unsigned char* read_ptr = &buf[p->cache->chunk_sz * locations[i].chunk_offset];
+        // Read from the correct chunk offset indicated by the
+	// variable location. Note that location is NOT the backing
+	// memory for the LRU queue. This is just data about the old
+	// chunk that was stored in the cachemap.
+        struct zn_pair *old_chunk = &locations[i];
+
+        // We use that data to get to the actual entry
+        struct zn_pair *old_zpc_entry = &zpc->chunks[old_chunk->chunk_offset];
+        struct zn_pair *new_zpc_entry = &zpc->chunks[i];
+	
+	assert(old_chunk->chunk_offset == old_zpc_entry->chunk_offset);
+	assert(old_chunk->id == old_zpc_entry->id);
+	assert(old_chunk->zone == old_zpc_entry->zone);
+        
+	unsigned char* read_ptr = &buf[p->cache->chunk_sz * old_chunk->chunk_offset];
 
 	// Write to the ith sequential chunk
 	unsigned long long wp =
-	    CHUNK_POINTER(p->cache->zone_cap, p->cache->chunk_sz, i, locations[i].zone);
+	    CHUNK_POINTER(p->cache->zone_cap, p->cache->chunk_sz, i, old_chunk->zone);
 	if (zn_write_out(p->cache->fd, p->cache->chunk_sz, read_ptr, ZN_WRITE_GRANULARITY, wp, p->cache->backend) != 0) {
             dbg_printf("Couldn't write to fd at wp=%llu\n", wp);
-        }
+	}
+
+	// Update the backing metadata for LRU queue. This involves
+	// deleting the entry in the LRU queue and pointing its hash
+	// table entry to NULL, then creating a new entry, adding it
+	// to the queue, and updating the hashmap to point to the new
+	// entry.
+
+	// Create the new entry
+	new_zpc_entry->chunk_offset = i;
+	new_zpc_entry->id = old_chunk->id;
+	new_zpc_entry->zone = old_chunk->zone;
+	new_zpc_entry->in_use = true;
+
+	// Find the old entry
+	GList *node = NULL;
+	// Should always be present and not NULL, because it
+	// represented a valid location on disk
+	assert(g_hash_table_lookup_extended(p->chunk_to_lru_map, old_zpc_entry, NULL, (gpointer *)&node));
+	assert(node);
+
+	// Delete the entry in the LRU queue and also its entry in the hashmap
+	g_queue_delete_link(&p->lru_queue, node);
+	g_hash_table_replace(p->chunk_to_lru_map, old_zpc_entry, NULL);
+
+	// Add the new entry to the LRU queue and hash map
+	g_queue_push_tail(&p->lru_queue, new_zpc_entry);
+	GList *new_node = g_queue_peek_tail_link(&p->lru_queue);
+	g_hash_table_insert(p->chunk_to_lru_map, new_zpc_entry, new_node);
+
+	// Increment the chunks_in_use
+	zpc->chunks_in_use += 1;
+    }
+
+    // Assign the rest to be free
+    for (uint32_t i = count; i < p->cache->max_zone_chunks; i++) {
+	zpc->chunks[i].in_use = false;
     }
 
     // Update the zsm. The latest pair that we wrote to was to the
@@ -128,9 +206,14 @@ zn_policy_compact_zone(struct zn_policy_chunk *p, struct eviction_policy_chunk_z
     int ret = zsm_return_active_zone(&p->cache->zone_state, &end_pair);
     assert(!ret);
 
+    for (uint32_t i = 0; i < count; i++) {
+        data_ids[i] = zpc->chunks[i].id;
+    }
+
     // Finish the compaction, updating the cachemap
     zn_cachemap_compact_end(&p->cache->cache_map, old_zone->zone_id, data_ids,
-                            locations, count);
+                            zpc->chunks, count);
+
 }
 
 static void
@@ -151,12 +234,19 @@ zn_policy_chunk_gc(policy_data_t policy) {
 
         struct eviction_policy_chunk_zone * old_zone = ent->data;
         assert(old_zone);
+
         dbg_printf("Found minheap_entry priority=%u, chunks_in_use=%u, zone=%u\n",
             ent->priority,  old_zone->chunks_in_use, old_zone->zone_id);
         dbg_printf("zone[%u] chunks:\n", old_zone->zone_id);
         dbg_print_zn_pair_list(old_zone->chunks, p->cache->max_zone_chunks);
 
-        // Naive?
+        if (zsm_get_num_free_chunks(&p->cache->zone_state) < old_zone->chunks_in_use) {
+            zn_policy_compact_zone(p, old_zone);
+            return;
+        }
+
+        unsigned char *buf = zn_read_from_disk_whole(p->cache, old_zone->zone_id, p->chunk_buf);
+
         for (uint32_t i = 0; i < p->cache->max_zone_chunks; i++) {
             if (!old_zone->chunks[i].in_use) {
                 continue;
@@ -167,15 +257,13 @@ zn_policy_chunk_gc(policy_data_t policy) {
 
             // Not enough zones available. We are just going to compact the old zone
             if (ret != ZSM_GET_ACTIVE_ZONE_SUCCESS) {
+                // This needs to be updated
                 zn_policy_compact_zone(p, old_zone);
                 return;
             }
 
-			// TODO: What if someone already wrote the existing data to a different location? We may need to check that first
-
             // Read the chunk from the old zone
-            unsigned char *data = zn_read_from_disk(p->cache, &old_zone->chunks[i]);
-            assert(data);
+            unsigned char *data = &buf[i * p->cache->chunk_sz];
 
             // Write the chunk to the new zone
             unsigned long long wp = CHUNK_POINTER(p->cache->zone_size, p->cache->chunk_sz,
@@ -185,7 +273,17 @@ zn_policy_chunk_gc(policy_data_t policy) {
             }
 
             // Update the cache map
-            zn_cachemap_insert(&p->cache->cache_map, old_zone->chunks[i].id, new_location); // Add new mapping
+            struct zn_pair old =
+                zn_cachemap_atomic_replace(&p->cache->cache_map, old_zone->chunks[i].id,
+                                           new_location); // Add new mapping
+            assert(old.zone == old_zone->zone_id);
+            assert(old.chunk_offset == i);
+            assert(old.id == old_zone->chunks[i].id);
+            assert(old.in_use == true);
+
+            // Return the zone
+            ret = zsm_return_active_zone(&p->cache->zone_state, &new_location);
+            assert(!ret);
 
             // Update the eviction policy metadata
             old_zone->chunks[i].in_use = false;
@@ -193,16 +291,33 @@ zn_policy_chunk_gc(policy_data_t policy) {
 
             // Update the new zone's metadata
             struct eviction_policy_chunk_zone *new_zone = &p->zone_pool[new_location.zone];
-            new_zone->chunks[new_location.chunk_offset] = old_zone->chunks[i];
+            new_zone->chunks[new_location.chunk_offset].chunk_offset = new_location.chunk_offset;
+            new_zone->chunks[new_location.chunk_offset].id = old.id;
             new_zone->chunks[new_location.chunk_offset].in_use = true;
+	    new_zone->chunks[new_location.chunk_offset].zone = new_zone->zone_id;
             new_zone->chunks_in_use++;
 
-            // Update the LRU queue
-            g_queue_push_tail(&p->lru_queue, &new_zone->chunks[new_location.chunk_offset]);
+	    // Find the old entry
+	    GList *node = NULL;
+	    // Should always be present and not NULL, because it
+	    // represented a valid location on disk
+	    assert(g_hash_table_lookup_extended(p->chunk_to_lru_map, &old_zone->chunks[old.chunk_offset], NULL, (gpointer *)&node));
+	    assert(node);
 
-            // Free the data buffer
-            free(data);
+	    // Delete the entry in the LRU queue and also its entry in the hashmap
+	    g_queue_delete_link(&p->lru_queue, node);
+	    g_hash_table_replace(p->chunk_to_lru_map, &old_zone->chunks[old.chunk_offset], NULL);
+
+	    // Add the new entry to the LRU queue and hash map
+	    g_queue_push_tail(&p->lru_queue, &new_zone->chunks[new_location.chunk_offset]);
+	    GList *new_node = g_queue_peek_tail_link(&p->lru_queue);
+	    g_hash_table_insert(p->chunk_to_lru_map, &new_zone->chunks[new_location.chunk_offset], new_node);
+
+	    // Increment the chunks_in_use
+	    new_zone->chunks_in_use += 1;;
+
         }
+
         zn_cachemap_clear_zone(&p->cache->cache_map, old_zone->zone_id);
         // Reset the old zone
         zsm_evict(&p->cache->zone_state, old_zone->zone_id);

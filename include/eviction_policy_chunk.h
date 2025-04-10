@@ -23,9 +23,9 @@ struct zn_policy_chunk {
     GHashTable *chunk_to_lru_map; /**< Hash table mapping chunks to locations in the LRU queue. */
     GMutex policy_mutex;          /**< LRU lock */
 
-    struct zn_minheap * invalid_pqueue; /**< Priority queue keeping track of invalid zones */
+    struct zn_minheap * invalid_pqueue; /**< Priority queue keeping track of invalid zones. Stores as data: ptrs to eviction_policy_chunk_zones */
 
-    struct eviction_policy_chunk_zone *zone_pool; /**< Pool of zones, backing for lru */
+    struct eviction_policy_chunk_zone *zone_pool; /**< Pool of zones, backing for minheap */
 
     struct zn_cache *cache; /**< Shared pointer to cache (not owned by policy) */
     uint32_t total_chunks;   /**< Number of chunks on disk */
