@@ -128,7 +128,7 @@ task_function(gpointer data, gpointer user_data) {
             fflush(stdout);
         }
 
-        dbg_printf("[%d]: ze_cache_get(workload[%d]=%d)\n", thread_data->tid, wi,
+        dbg_printf("[%d]: ze_cache_get(workload[%lu]=%d)\n", thread_data->tid, wi,
                thread_data->cache->reader.workload_buffer[wi]);
 
 		data_id = thread_data->cache->reader.workload_buffer[wi];

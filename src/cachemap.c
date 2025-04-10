@@ -29,10 +29,12 @@ zn_cachemap_init(struct zn_cachemap *map, const int num_zones, gint *active_read
     map->active_readers = active_readers_arr;
 }
 
+#ifdef UNUSED
 static void
 free_cond_var(GCond *cond) {
     g_cond_clear(cond);
 }
+#endif
 
 struct zone_map_result
 zn_cachemap_find(struct zn_cachemap *map, const uint32_t data_id) {
