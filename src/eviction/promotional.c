@@ -58,7 +58,10 @@ int
 zn_policy_promotional_get_zone_to_evict(policy_data_t policy) {
     struct zn_policy_promotional *promote_policy = policy;
 
-    g_mutex_lock(&promote_policy->policy_mutex);
+    gboolean locked_by_us = g_mutex_trylock(&promote_policy->policy_mutex);
+    if (!locked_by_us) {
+        return -1;
+    }
 
     dbg_print_g_queue("lru_queue", &promote_policy->lru_queue, PRINT_G_QUEUE_GINT);
 

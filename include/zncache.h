@@ -129,6 +129,16 @@ void
 zn_destroy_cache(struct zn_cache *cache);
 
 /**
+ * @brief Read the entire zone into the buffer. This is used to compact a zone.
+ *
+ * @param cache Pointer to the `zn_cache` structure
+ * @param zone_id The zone to read
+ * @param buffer the buffer to write to. It must have been allocated by the caller and big enough to store
+ * @return Buffer read from disk. It's the same buffer as the input
+ */
+unsigned char * zn_read_from_disk_whole(struct zn_cache *cache, uint32_t zone_id, void *buffer);
+
+/**
  * @brief Read a chunk from disk
  *
  * @param cache Pointer to the `zn_cache` structure

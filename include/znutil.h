@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #define SEED 42
+#define ZN_DIRECT_ALIGNMENT 4096
 
 #include "libzbd/zbd.h"
 
@@ -32,6 +33,7 @@ enum print_g_hash_table_type {
     PRINT_G_HASH_TABLE_PROM_LRU_NODE = 1,
     PRINT_G_HASH_TABLE_ZN_PAIR = 2,
     PRINT_G_HASH_TABLE_ZN_PAIR_NODE = 3,
+    PRINT_G_HASH_TABLE_ZONE_MAP_RESULT = 4,
 };
 
 /**

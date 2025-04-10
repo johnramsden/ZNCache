@@ -1,4 +1,5 @@
 #include "cachemap.h"
+#include "znbackend.h"
 #include "zncache.h"
 
 #include "assert.h"
@@ -80,27 +81,111 @@ zn_cachemap_find(struct zn_cachemap *map, const uint32_t data_id) {
 }
 
 void
-zn_cachemap_insert(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location) {
+zn_cachemap_compact_begin(struct zn_cachemap *map, const uint32_t zone_id, uint32_t** data_ids, struct zn_pair** locations, uint32_t* count) {
     assert(map);
+    assert(data_ids);
+    assert(locations);
+    assert(count);
+
+    // This function gathers all valid chunks in the zone and informs
+    // the calling thread of them.
+    // It also removes all entries in the hash map in the meantime,
+    // replacing them with condition variables until the thread is
+    // finished compacting the zone.
 
     g_mutex_lock(&map->cache_map_mutex);
 
-    dbg_print_g_hash_table("map->data_map[location.zone]", map->data_map[location.zone], PRINT_G_HASH_TABLE_GINT);
+    *count = g_hash_table_size(map->data_map[zone_id]);
+    *locations = malloc(sizeof(struct zn_pair) * (*count));
+    *data_ids = malloc(sizeof(uint32_t) * (*count));
+    assert(*locations);
+    assert(*data_ids);
 
+    // Gather all valid chunks in the zone and temporarily invalidate them
+    GHashTableIter iter;
+    gpointer key = NULL;
+    gpointer value = NULL;
+    int i = 0;
+
+    // Iterate through all valid chunks. Invalid chunks should not be in the data map.
+    g_hash_table_iter_init (&iter, map->data_map[zone_id]);
+    while (g_hash_table_iter_next (&iter, &key, &value)) {
+        uint32_t chunk_offset = GPOINTER_TO_UINT(key);
+        uint32_t data_id = GPOINTER_TO_UINT(value);
+
+        // Find the entry in the hash table
+        dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
+        struct zone_map_result* res = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
+        assert(res);
+        assert(res->type == RESULT_LOC);
+        assert(res->location.chunk_offset == chunk_offset);
+        assert(res->location.id == data_id);
+
+        // Invalidate it, replace with a temporary condition variable
+        res->type = RESULT_COND;
+        g_cond_init(&res->write_finished);
+
+        // Write to the out variables
+        (*data_ids)[i] = data_id;
+        (*locations)[i] = (struct zn_pair){.chunk_offset = chunk_offset, .zone = zone_id};
+
+        i += 1;
+    }
+
+    g_mutex_unlock(&map->cache_map_mutex);
+}
+
+static void
+zn_cachemap_insert_nolock(struct zn_cachemap *map, const uint32_t data_id,
+                          struct zn_pair location) {
+    
     // It must contain an entry if the thread called zn_cachemap_find beforehand
     assert(g_hash_table_contains(map->zone_map, GUINT_TO_POINTER(data_id)));
 
     struct zone_map_result *result = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
     assert(result->type == RESULT_COND);
 
+    dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
     result->location = location; // Does this mutate the entry in the hash table?
     result->type = RESULT_LOC;
+    dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
     assert(map->data_map[location.zone]);
     g_hash_table_insert(map->data_map[location.zone], GUINT_TO_POINTER(location.chunk_offset), GINT_TO_POINTER(data_id));
     g_cond_broadcast(&result->write_finished);            // Wake up threads waiting for it
 
     dbg_print_g_hash_table("map->data_map[location.zone]", map->data_map[location.zone], PRINT_G_HASH_TABLE_GINT);
 
+}
+
+void
+zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const uint32_t* data_ids, struct zn_pair* locations, uint32_t count) {
+    assert(map);    
+    assert(data_ids);
+    assert(locations);
+
+    // This function finishes compaction. It reinserts all valid
+    // chunks back into the cachemap, replacing the condition
+    // variables with actual locations.
+
+    g_mutex_lock(&map->cache_map_mutex);
+
+    // Replace with actual locations
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t zone = locations[i].zone;
+	    assert(zone_id == zone);
+	    zn_cachemap_insert_nolock(map, data_ids[i], locations[i]);
+    }
+
+    g_mutex_unlock(&map->cache_map_mutex);
+}
+
+void
+zn_cachemap_insert(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location) {
+    assert(map);
+    g_mutex_lock(&map->cache_map_mutex);
+    dbg_print_g_hash_table("map->data_map[location.zone]", map->data_map[location.zone], PRINT_G_HASH_TABLE_GINT);
+	zn_cachemap_insert_nolock(map, data_id, location);
+    dbg_print_g_hash_table("map->data_map[location.zone]", map->data_map[location.zone], PRINT_G_HASH_TABLE_GINT);
     g_mutex_unlock(&map->cache_map_mutex);
 }
 

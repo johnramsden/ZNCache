@@ -106,7 +106,10 @@ zsm_get_active_zone(struct zone_state_manager *state, struct zn_pair *pair);
 GArray
 zsm_get_active_zone_batch(int chunks);
 
-// Returns the active zone after it's written to
+
+/** @brief Returns the active zone after it's written to.
+ *  @param pair the chunk that was written to.
+ */
 int
 zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair);
 
@@ -119,6 +122,13 @@ zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair);
  */
 int
 zsm_evict(struct zone_state_manager *state, int zone_to_free);
+
+/** @brief Resets the zone pointer, making it writeable again from the start. Once the thread is finished updating the zone, it should call zsm_return_active_zone.
+ *  @param zone_id the zone to make free again
+ *  @param count the number of chunks that are still valid.
+ */
+void
+zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t count);
 
 void
 zsm_failed_to_write(struct zone_state_manager *state, struct zn_pair pair);

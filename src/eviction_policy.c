@@ -3,10 +3,12 @@
 #include "eviction_policy_promotional.h"
 #include "eviction_policy_chunk.h"
 #include "zncache.h"
+#include "znutil.h"
 
 #include <assert.h>
 #include <glib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef UNUSED
 /**
@@ -79,7 +81,10 @@ zn_evict_policy_init(struct zn_evict_policy *policy, enum zn_evict_policy_type t
 
             data->cache = cache;
 
-            data->chunk_buf = malloc(cache->max_zone_chunks * cache->chunk_sz);
+            if (posix_memalign((void**)&data->chunk_buf, ZN_DIRECT_ALIGNMENT,
+                               cache->max_zone_chunks * cache->chunk_sz) != 0) {
+                nomem();
+            }
             assert(data->chunk_buf);
 
             data->total_chunks = cache->nr_zones * cache->max_zone_chunks;
