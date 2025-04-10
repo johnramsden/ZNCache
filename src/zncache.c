@@ -380,9 +380,10 @@ main(int argc, char **argv) {
 
     uint64_t zone_capacity = 0;
     if (device_type == ZE_BACKEND_ZNS) {
-        if (MAX_ZONES_USED != 0) {
+        if (MAX_ZONES_USED < info.nr_zones) {
             info.nr_zones = MAX_ZONES_USED;
         }
+
         int ret = zbd_reset_zones(fd, 0, 0);
         if (ret != 0) {
             fprintf(stderr, "Couldn't reset zones\n");

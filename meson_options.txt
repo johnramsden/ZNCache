@@ -3,7 +3,7 @@ option('debugging', type : 'boolean', value : true, description : 'Enable debug 
 option('debugsymbols', type : 'boolean', value : true, description : 'Enable debug info (-g)')
 option('PROFILER_PRINT_EVERY', type : 'boolean', value : true, description : 'Print metrics on every call, not just on timer')
 option('BLOCK_ZONE_CAPACITY', type : 'integer', value : 1129316352, description : 'Set SSD zone size (default is 1077MiB)')
-option('MAX_ZONES_USED', type : 'integer', value : 0, description : 'Set maximum zones to use (default 0 means all)')
+option('MAX_ZONES_USED', type : 'integer', value : 904, description : 'Set maximum zones to use (default 904)')
 option('READ_SLEEP_US', type : 'integer', value : 40430, description : 'Read delay in us')
 option('PROFILING_INTERVAL_SEC', type : 'integer', value : 10, description : 'Interval to print metrics on (averaged)')
 option('EVICT_HIGH_THRESH_ZONES', type : 'integer', value : 2, description : 'High water mark for zone eviction')

@@ -151,7 +151,7 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair);
  */
 int
 zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
-             unsigned long long wp_start, enum zn_backend backend);
+             unsigned long long wp_start, enum zn_backend backend, uint32_t zone_id, ssize_t zone_cap);
 
 /**
  * Allocate a buffer prefixed by `zone_id`, with the rest being `RANDOM_DATA`
