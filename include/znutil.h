@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #define SEED 42
+#define ZN_DIRECT_ALIGNMENT 4096
 
 #include "libzbd/zbd.h"
 

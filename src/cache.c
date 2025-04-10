@@ -15,8 +15,6 @@
 #include "libzbd/zbd.h"
 #include <inttypes.h>
 
-#define ZN_DIRECT_ALIGNMENT 4096
-
 void
 zn_fg_evict(struct zn_cache *cache) {
     uint32_t free_zones = zsm_get_num_free_zones(&cache->zone_state);
