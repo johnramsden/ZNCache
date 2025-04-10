@@ -145,6 +145,10 @@ zn_policy_chunk_gc(policy_data_t policy) {
 
     while (free_zones < EVICT_LOW_THRESH_ZONES) {
         struct zn_minheap_entry *ent = zn_minheap_extract_min(p->invalid_pqueue);
+        if (!ent) {
+            return;
+        }
+
         struct eviction_policy_chunk_zone * old_zone = ent->data;
         assert(old_zone);
         dbg_printf("Found minheap_entry priority=%u, chunks_in_use=%u, zone=%u\n",
@@ -210,8 +214,10 @@ int
 zn_policy_chunk_evict(policy_data_t policy) {
     struct zn_policy_chunk *p = policy;
 
-    g_mutex_lock(&p->policy_mutex);
-
+    gboolean locked_by_us = g_mutex_trylock(&p->policy_mutex);
+    if (!locked_by_us) {
+        return -1;
+    }
 
     uint32_t in_lru = g_queue_get_length(&p->lru_queue);
     uint32_t free_chunks = p->total_chunks - in_lru;
