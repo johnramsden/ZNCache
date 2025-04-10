@@ -18,6 +18,7 @@
 
 void
 zn_fg_evict(struct zn_cache *cache) {
+    // ZN_PROFILER_PRINTF(cache->profiler, "EVICTIONBEGIN_EVERY,\n", );
     uint32_t free_zones = zsm_get_num_free_zones(&cache->zone_state);
     if (cache->eviction_policy.type == ZN_EVICT_PROMOTE_ZONE) {
         for (uint32_t i = 0; i < EVICT_LOW_THRESH_ZONES - free_zones; i++) {
@@ -48,11 +49,11 @@ zn_fg_evict(struct zn_cache *cache) {
 }
 
 static int
-zn_get_wp(int fd, uint32_t zone_id, ssize_t zone_cap, unsigned long long *wp) {
-    struct zbd_zone zone[MAX_ZONES_USED];
+zn_get_wp(int fd, uint32_t zone_id, unsigned long long *wp) {
+    struct zbd_zone zone[MAX_ZONE_LIMIT];
 
-    unsigned int nr_zones = MAX_ZONES_USED;
-    int ret = zbd_report_zones(fd, 0, MAX_ZONES_USED*zone_cap, ZBD_RO_ALL, zone, &nr_zones);
+    unsigned int nr_zones = MAX_ZONE_LIMIT;
+    int ret = zbd_report_zones(fd, 0, 0, ZBD_RO_ALL, zone, &nr_zones);
 
     if (ret != 0 || nr_zones == 0) {
         return -1;
@@ -134,7 +135,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
         int ret;
         if (cache->backend == ZE_BACKEND_ZNS) {
             unsigned long long wp_bytes;
-            ret = zn_get_wp(cache->fd, location.zone, cache->zone_cap, &wp_bytes);
+            ret = zn_get_wp(cache->fd, location.zone, &wp_bytes);
             if (ret != 0 || wp_bytes != wp) {
                 fprintf(stderr, "Error (%d): wp_bytes (%llu) != wp (%llu), zone=%u, chunk=%u\n", ret, wp_bytes, wp, location.zone, location.chunk_offset);
                 assert(!"wp_bytes != wp");
@@ -143,7 +144,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        ret = zn_write_out(cache->fd, cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp, cache->backend, location.zone, cache->zone_cap);
+        ret = zn_write_out(cache->fd, cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp, cache->backend, location.zone);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
@@ -302,7 +303,7 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
 
 int
 zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
-             unsigned long long wp_start, enum zn_backend backend, uint32_t zone_id, ssize_t zone_cap) {
+             unsigned long long wp_start, enum zn_backend backend, uint32_t zone_id) {
     ssize_t bytes_written;
     size_t total_written = 0;
 
@@ -320,7 +321,7 @@ zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t
             fprintf(stderr, "Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
             if (backend == ZE_BACKEND_ZNS) {
                 unsigned long long wp;
-                int ret = zn_get_wp(fd, zone_id, zone_cap, &wp);
+                int ret = zn_get_wp(fd, zone_id, &wp);
                 if (ret != 0) {
                     assert(!"Error getting wp");
                 }

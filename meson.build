@@ -28,6 +28,7 @@ EVICT_HIGH_THRESH_CHUNKS = get_option('EVICT_HIGH_THRESH_CHUNKS')
 EVICT_LOW_THRESH_CHUNKS = get_option('EVICT_LOW_THRESH_CHUNKS')
 EVICT_INTERVAL_US = get_option('EVICT_INTERVAL_US')
 MAX_ZONES_USED = get_option('MAX_ZONES_USED')
+MAX_ZONE_LIMIT = get_option('MAX_ZONE_LIMIT')
 
 # Conditional compiler flags
 cflags = [
@@ -41,6 +42,7 @@ cflags = [
     '-DEVICT_LOW_THRESH_CHUNKS=' + EVICT_LOW_THRESH_CHUNKS.to_string(),
     '-DEVICT_INTERVAL_US=' + EVICT_INTERVAL_US.to_string(),
     '-DMAX_ZONES_USED=' + MAX_ZONES_USED.to_string(),
+    '-DMAX_ZONE_LIMIT=' + MAX_ZONE_LIMIT.to_string(),
     '-D_POSIX_C_SOURCE=200112L', # CLOCK_MONO
 ]
 

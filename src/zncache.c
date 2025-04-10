@@ -380,7 +380,7 @@ main(int argc, char **argv) {
 
     uint64_t zone_capacity = 0;
     if (device_type == ZE_BACKEND_ZNS) {
-        if (MAX_ZONES_USED < info.nr_zones) {
+        if (MAX_ZONES_USED != 0) {
             info.nr_zones = MAX_ZONES_USED;
         }
 
