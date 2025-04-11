@@ -332,20 +332,6 @@ main(int argc, char **argv) {
         workload_buffer = simple_workload;
     }
 
-    printf("Running with configuration:\n"
-           "\tDevice name: %s\n"
-           "\tDevice type: %s\n"
-           "\tChunk size: %lu\n"
-           "\tBLOCK_ZONE_CAPACITY: %u\n"
-           "\tWorker threads: %u\n"
-           "\tEviction threads: %u\n"
-           "\tWorkload file: %s\n"
-           "\tMetrics file: %s\n",
-           device, (device_type == ZE_BACKEND_ZNS) ? "ZNS" : "Block", chunk_sz,
-           BLOCK_ZONE_CAPACITY, nr_threads, nr_eviction_threads,
-           workload_file != NULL ? workload_file : "Simple generator",
-           metrics_file != NULL ? metrics_file : "NO");
-
 #ifdef DEBUG
     printf("\tDEBUG=on\n");
 #endif
@@ -368,6 +354,7 @@ main(int argc, char **argv) {
 
         if (size < BLOCK_ZONE_CAPACITY) {
             assert(!"The size of the disk is smaller than a single zone!");
+            return -1;
         }
         info.nr_zones = ((long) size / BLOCK_ZONE_CAPACITY);
         info.max_nr_active_zones = 0;
@@ -404,6 +391,21 @@ main(int argc, char **argv) {
     if (RANDOM_DATA == NULL) {
         nomem();
     }
+
+    printf("Running with configuration:\n"
+       "\tDevice name: %s\n"
+       "\tDevice type: %s\n"
+       "\tChunk size: %lu\n"
+       "\tBLOCK_ZONE_CAPACITY: %u\n"
+       "\tWorker threads: %u\n"
+       "\tEviction threads: %u\n"
+       "\tWorkload file: %s\n"
+       "\tMetrics file: %s\n"
+       "\tNum zones: %d\n",
+       device, (device_type == ZE_BACKEND_ZNS) ? "ZNS" : "Block", chunk_sz,
+       BLOCK_ZONE_CAPACITY, nr_threads, nr_eviction_threads,
+       workload_file != NULL ? workload_file : "Simple generator",
+       metrics_file != NULL ? metrics_file : "NO", info.nr_zones);
 
     struct zn_cache cache = {0};
     zn_init_cache(&cache, &info, chunk_sz, zone_capacity, fd, EVICTION_POLICY, device_type, workload_buffer, workload_max, metrics_file);

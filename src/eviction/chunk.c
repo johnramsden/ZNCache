@@ -30,7 +30,7 @@ zn_policy_chunk_update(policy_data_t _policy, struct zn_pair location,
 
     GList *node;
     // Should always be present (might be NULL)
-    assert(g_hash_table_lookup_extended(p->chunk_to_lru_map, zp, NULL, (gpointer *)&node));
+    g_hash_table_lookup_extended(p->chunk_to_lru_map, zp, NULL, (gpointer *)&node);
 
     if (io_type == ZN_WRITE) {
         assert(!zp->in_use);

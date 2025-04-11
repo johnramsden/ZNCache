@@ -29,6 +29,7 @@ EVICT_LOW_THRESH_CHUNKS = get_option('EVICT_LOW_THRESH_CHUNKS')
 EVICT_INTERVAL_US = get_option('EVICT_INTERVAL_US')
 MAX_ZONES_USED = get_option('MAX_ZONES_USED')
 MAX_ZONE_LIMIT = get_option('MAX_ZONE_LIMIT')
+ASSERTS = get_option('ASSERTS')
 
 # Conditional compiler flags
 cflags = [
@@ -45,6 +46,10 @@ cflags = [
     '-DMAX_ZONE_LIMIT=' + MAX_ZONE_LIMIT.to_string(),
     '-D_POSIX_C_SOURCE=200112L', # CLOCK_MONO
 ]
+
+if ASSERTS != true
+    cflags += ['-DNDEBUG']
+endif
 
 if PROFILER_PRINT_EVERY
     cflags += ['-DZN_PROFILER_PRINT_EVERY']

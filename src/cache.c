@@ -22,39 +22,22 @@ zn_fg_evict(struct zn_cache *cache) {
     uint32_t free_zones = zsm_get_num_free_zones(&cache->zone_state);
     if (cache->eviction_policy.type == ZN_EVICT_PROMOTE_ZONE) {
         for (uint32_t i = 0; i < EVICT_LOW_THRESH_ZONES - free_zones; i++) {
-            struct timespec start_time, end_time;
-            TIME_NOW(&start_time);
             int zone =
                 cache->eviction_policy.do_evict(cache->eviction_policy.data);
             if (zone == -1) {
                 dbg_printf("No zones to evict%s", "\n");
                 break;
             }
-            TIME_NOW(&end_time);
-            double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
-            ZN_PROFILER_PRINTF(cache->profiler, "DOEVICT_EVERY,%f\n", t);
 
-            TIME_NOW(&start_time);
             zn_cachemap_clear_zone(&cache->cache_map, zone);
-            TIME_NOW(&end_time);
-            t = TIME_DIFFERENCE_NSEC(start_time, end_time);
-            ZN_PROFILER_PRINTF(cache->profiler, "CLEARZONES_EVERY,%f\n", t);
 
-            TIME_NOW(&start_time);
             while (cache->active_readers[zone] > 0) {
                 g_thread_yield();
             }
-            TIME_NOW(&end_time);
-            t = TIME_DIFFERENCE_NSEC(start_time, end_time);
-            ZN_PROFILER_PRINTF(cache->profiler, "WAITNOREADERS_EVERY,%f\n", t);
 
             // We can assume that no threads will create entries to the zone in the cache map,
             // because it is full.
-            TIME_NOW(&start_time);
             int ret = zsm_evict(&cache->zone_state, zone);
-            TIME_NOW(&end_time);
-            t = TIME_DIFFERENCE_NSEC(start_time, end_time);
-            ZN_PROFILER_PRINTF(cache->profiler, "ZSMEVICT_EVERY,%f\n", t);
             if (ret != 0) {
                 assert(!"Issue occurred with evicting zones\n");
             }

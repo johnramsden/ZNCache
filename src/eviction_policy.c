@@ -100,11 +100,11 @@ zn_evict_policy_init(struct zn_evict_policy *policy, enum zn_evict_policy_type t
                 for (uint32_t c = 0; c < cache->max_zone_chunks; c++) {
                     data->zone_pool[z].chunks[c].chunk_offset = 0;
                     data->zone_pool[z].chunks[c].in_use = false;
-                    assert(g_hash_table_insert(
+                    g_hash_table_insert(
                         data->chunk_to_lru_map,
                         &data->zone_pool[z].chunks[c],
                         NULL
-                    ));
+                    );
                 }
             }
 

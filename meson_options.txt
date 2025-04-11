@@ -14,3 +14,4 @@ option('EVICT_LOW_THRESH_CHUNKS', type : 'integer', value : 12, description : 'L
 option('EVICT_INTERVAL_US', type : 'integer', value : 100000, description : 'Sleep time between evictions (us) (default 100,000, or 0.1s)')
 option('EVICTION_POLICY', type : 'combo', choices: ['ZN_EVICT_PROMOTE_ZONE', 'ZN_EVICT_CHUNK'], value : 'ZN_EVICT_PROMOTE_ZONE',
        description : 'Eviction policy')
+option('ASSERTS', type : 'boolean', value : false, description : 'Turn asserts on')

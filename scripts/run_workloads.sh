@@ -102,6 +102,7 @@ for file in "$directory"/*.bin; do
                                        -DEVICTION_POLICY="$eviction" \
                                        -DPROFILING_INTERVAL_SEC="60" \
                                        -DMAX_ZONES_USED="$n_zones" \
+                                       -DASSERTS=false \
                                         >/dev/null
     meson compile -C buildDir >/dev/null
 
