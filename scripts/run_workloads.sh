@@ -11,6 +11,13 @@ usage() {
     exit 1
 }
 
+cleanup() {
+    echo "Cleaning up IOSTAT=$IOSTAT_PID..."
+    kill $IOSTAT_PID 2>/dev/null
+    wait $IOSTAT_PID 2>/dev/null
+}
+trap cleanup INT TERM EXIT
+
 # Default value for the profile flag
 profile=false
 
@@ -68,7 +75,7 @@ for file in "$directory"/*.bin; do
         declare -g "$key"="$value"
     done
 
-    runfile="./logs/$(date '+%Y-%m-%d_%H:%M:%S')-run"
+    runfile="./logs/$chunk_size,L=$latency,$distr,R=$ratio,I=$iterations,NZ=$n_zones,${device##*/}-$(date '+%d_%H:%M:%S')-run"
     # Now you can access the variables
     {
         echo "Chunk Size: $chunk_size"
@@ -111,6 +118,9 @@ for file in "$directory"/*.bin; do
         "${SCRIPT_DIR}/precondition-nvme1n1.sh" "${n_zones}"
     fi
 
+    iostat /dev/nvme1n1 -dx "$device" 1 > $runfile.iostat.log &
+    IOSTAT_PID=$!
+
     # shellcheck disable=SC2024
     if $profile; then
         sudo perf record -F 99 -g -o "$runfile.perf" -- ./buildDir/src/zncache "$1" "$chunk_size" "$threads" -w "$file" -i "$iterations" -m "$runfile.profile.csv" >> "$runfile"
@@ -119,6 +129,9 @@ for file in "$directory"/*.bin; do
         sudo ./buildDir/src/zncache "$1" "$chunk_size" "$threads" -w "$file" -i "$iterations" -m "$runfile.profile.csv" >> "$runfile"
         ret=$?
     fi
+
+    kill $IOSTAT_PID
+
     if [ $ret -ne 0 ]; then
         echo "Run FAILED!"
         ret=1
