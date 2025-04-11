@@ -137,7 +137,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, ZN_WRITE_GRANULARITY, wp);
+        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, cache->chunk_sz, wp);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);

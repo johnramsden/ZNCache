@@ -20,8 +20,6 @@
 
 #define MAX_OPEN_ZONES 14
 
-#define ZN_WRITE_GRANULARITY 1048576 // 1MB
-
 /**
  * @struct zn_reader
  * @brief Manages concurrent read operations within the cache.
