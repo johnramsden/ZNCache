@@ -47,6 +47,15 @@ meson setup --reconfigure buildDir -Dverify=true -Ddebugging=true -DBLOCK_ZONE_C
 meson compile -C buildDir
 ```
 
+## Scheduler
+
+**IMPORTANT**: Must use a non re-ordering scheduler such as `mq-deadline`, set accordingly in `/sys/block/$DEVICE/queue/scheduler`
+
+```shell
+echo mq-deadline | tee /sys/block/$DEVICE/queue/scheduler
+cat /sys/block/$DEVICE/queue/scheduler
+```
+
 ## Testing and Development
 
 Create an emulated ZNS device via `scripts/nullblk-zones.sh` with:
