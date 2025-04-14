@@ -25,7 +25,18 @@ struct chunk_queue {
   struct eviction_policy_chunk_zone *zone_pool; /**< Pool of zones, backing for minheap */
 
   uint32_t total_chunks;   /**< Number of chunks on disk */
+  uint32_t max_zone_chunks;   /**< Number of chunks on disk */
 } __attribute__((aligned(64)));
+
+/** @brief Initializes the chunk queue.
+    @param[out] chunk_queue the data structure to be initialized
+    @param[in] nr_zones the number of zones in the cache
+    @param[in] max_zone_chunks the number of chunks in a zone
+    @returns 0 on success, 1 on failure
+ */
+int
+zn_init_chunk_queue(struct chunk_queue *, uint32_t nr_zones,
+                    uint32_t max_zone_chunks);
 
 /** @brief Adds a chunk to the LRU queue.
     @param[in] chunk_queue the data structure
@@ -33,7 +44,15 @@ struct chunk_queue {
     @returns 0 on success, 1 on failure
  */
 int
-zn_add_chunk_to_lru(struct chunk_queue, struct zn_pair);
+zn_add_chunk_to_lru(struct chunk_queue*, struct zn_pair);
+
+/** @brief Updates a chunk already in the chunk queue.
+    @param[out] chunk_queue the data structure
+    @param[in] zn_pair the chunk to be updated
+    @returns 0 on success, 1 on failure
+ */
+int
+zn_update_chunk_in_lru(struct chunk_queue *cq, struct zn_pair chunk);
 
 /** @brief Invalidates the latest chunk in the data structure and returns it.
     @param[in] chunk_queue the data structure
@@ -41,7 +60,7 @@ zn_add_chunk_to_lru(struct chunk_queue, struct zn_pair);
     @returns 0 on success, 1 on failure.
  */
 int
-zn_invalidate_latest_chunk(struct chunk_queue, struct zn_pair* out);
+zn_invalidate_latest_chunk(struct chunk_queue*, struct zn_pair* out);
 
 /** @brief Returns the most invalidated zone.
     @param[in] chunk_queue the data structure
@@ -49,4 +68,4 @@ zn_invalidate_latest_chunk(struct chunk_queue, struct zn_pair* out);
     @returns 0 on success, 1 on failure.
  */
 int
-zn_zone_dequeue(struct chunk_queue, int *out_zone);
+zn_zone_dequeue(struct chunk_queue*, uint32_t *out_zone);
