@@ -12,6 +12,7 @@ srcs = files(
     'minheap.c',
     'eviction/promotional.c',
     'eviction/chunk.c'
+    'eviction/chunk_queue.c'
 )
 
 executable('zncache',
