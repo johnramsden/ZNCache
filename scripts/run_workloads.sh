@@ -125,7 +125,7 @@ for file in "$directory"/*.bin; do
         "${SCRIPT_DIR}/precondition-nvme1n1.sh" "${n_zones}"
     fi
 
-    iostat /dev/nvme1n1 -dx "$device" 1 > $runfile.iostat.log &
+    iostat -dx "$device" 1 > $runfile.iostat.log &
     IOSTAT_PID=$!
 
     # shellcheck disable=SC2024
