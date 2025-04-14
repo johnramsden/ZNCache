@@ -30,6 +30,7 @@ EVICT_INTERVAL_US = get_option('EVICT_INTERVAL_US')
 MAX_ZONES_USED = get_option('MAX_ZONES_USED')
 MAX_ZONE_LIMIT = get_option('MAX_ZONE_LIMIT')
 ASSERTS = get_option('ASSERTS')
+MAX_IO = get_option('MAX_IO')
 
 # Conditional compiler flags
 cflags = [
@@ -44,6 +45,7 @@ cflags = [
     '-DEVICT_INTERVAL_US=' + EVICT_INTERVAL_US.to_string(),
     '-DMAX_ZONES_USED=' + MAX_ZONES_USED.to_string(),
     '-DMAX_ZONE_LIMIT=' + MAX_ZONE_LIMIT.to_string(),
+    '-DMAX_IO=' + MAX_IO.to_string(),
     '-D_POSIX_C_SOURCE=200112L', # CLOCK_MONO
 ]
 

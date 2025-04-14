@@ -120,7 +120,7 @@ zn_cache_get(struct zn_cache *cache, const uint32_t id, unsigned char *random_bu
 
         struct timespec start_time, end_time;
         TIME_NOW(&start_time);
-        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, cache->chunk_sz, wp);
+        int ret = zn_write_out(cache->fd, cache->chunk_sz, data, cache->io_size, wp);
         TIME_NOW(&end_time);
         double t = TIME_DIFFERENCE_NSEC(start_time, end_time);
         ZN_PROFILER_UPDATE(cache->profiler, ZN_PROFILER_METRIC_WRITE_LATENCY, t);
@@ -206,6 +206,8 @@ zn_init_cache(struct zn_cache *cache, struct zbd_info *info, size_t chunk_sz, ui
     cache->reader.workload_index = 0;
     cache->reader.thresh_perc = 0;
 
+    cache->io_size = MAX_IO == 0 ? cache->chunk_sz : MAX_IO;
+
     /* VERIFY_ZE_CACHE(cache); */
 }
 
@@ -237,39 +239,41 @@ zn_destroy_cache(struct zn_cache *cache) {
 
 unsigned char *
 zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
-    unsigned char *data;
+    size_t chunk_sz = cache->chunk_sz;
+    size_t max_io = cache->io_size;
+    size_t align = ZN_DIRECT_ALIGNMENT;
 
-    // Ensure chunk size is aligned
-    if ((cache->chunk_sz % ZN_DIRECT_ALIGNMENT) != 0) {
-        fprintf(stderr, "Error: chunk_sz (%zu) must be multiple of %d for O_DIRECT\n",
-                cache->chunk_sz, ZN_DIRECT_ALIGNMENT);
+    // Sanity checks
+    if ((chunk_sz % align) != 0 || (max_io % align) != 0) {
+        fprintf(stderr, "Error: Sizes must be aligned to %zu bytes for O_DIRECT\n", align);
         return NULL;
     }
 
     // Allocate aligned buffer
-    if (posix_memalign((void **)&data, ZN_DIRECT_ALIGNMENT, cache->chunk_sz) != 0) {
+    unsigned char *data;
+    if (posix_memalign((void **)&data, align, chunk_sz) != 0) {
         nomem();
     }
 
-    // Compute aligned offset
-    unsigned long long wp =
-        CHUNK_POINTER(cache->zone_size, cache->chunk_sz, zone_pair->chunk_offset, zone_pair->zone);
-
-    if ((wp % ZN_DIRECT_ALIGNMENT) != 0) {
-        fprintf(stderr, "Error: read offset (%llu) not aligned to %d for O_DIRECT\n",
-                wp, ZN_DIRECT_ALIGNMENT);
+    // Calculate starting offset
+    unsigned long long wp = CHUNK_POINTER(cache->zone_size, chunk_sz, zone_pair->chunk_offset, zone_pair->zone);
+    if ((wp % align) != 0) {
+        fprintf(stderr, "Error: Read offset (%llu) not aligned to %zu for O_DIRECT\n", wp, align);
         free(data);
         return NULL;
     }
 
-    dbg_printf("[%u,%u] read from write pointer: %llu\n",
-               zone_pair->zone, zone_pair->chunk_offset, wp);
-
-    ssize_t b = pread(cache->fd, data, cache->chunk_sz, wp);
-    if (b != (ssize_t)cache->chunk_sz) {
-        fprintf(stderr, "Couldn't read from fd: %s\n", strerror(errno));
-        free(data);
-        return NULL;
+    // Loop in max_io chunks
+    size_t total_read = 0;
+    while (total_read < chunk_sz) {
+        size_t to_read = (chunk_sz - total_read > max_io) ? max_io : (chunk_sz - total_read);
+        ssize_t r = pread(cache->fd, data + total_read, to_read, wp + total_read);
+        if (r != (ssize_t)to_read) {
+            fprintf(stderr, "Partial read at offset %llu (%zd/%zu): %s\n", wp + total_read, r, to_read, strerror(errno));
+            free(data);
+            return NULL;
+        }
+        total_read += r;
     }
 
     return data;

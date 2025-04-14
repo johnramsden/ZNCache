@@ -97,6 +97,12 @@ for file in "$directory"/*.bin; do
     # shellcheck disable=SC2024
     echo "Running $runfile"
 
+    max_io=0
+    if [[ "$device" == /dev/nvme1n1* ]]; then
+        # Limit SSD writes to 1.25MiB
+        max_io=1310720
+    fi
+
     # debugsymbols=true to profile
     meson setup --reconfigure buildDir -Dverify=false \
                                        -Ddebugging=false \
@@ -110,6 +116,7 @@ for file in "$directory"/*.bin; do
                                        -DPROFILING_INTERVAL_SEC="60" \
                                        -DMAX_ZONES_USED="$n_zones" \
                                        -DASSERTS=false \
+                                       -DMAX_IO="$max_io" \
                                         >/dev/null
     meson compile -C buildDir >/dev/null
 

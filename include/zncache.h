@@ -58,6 +58,7 @@ struct zn_cache {
     size_t chunk_sz;              /**< Size of each chunk in bytes. */
     uint64_t zone_cap;            /**< Maximum storage capacity per zone in bytes. */
     uint64_t zone_size;           /**< Storage size per zone in bytes. */
+    ssize_t io_size;              /**< IO size in bytes. */
 
     struct zn_cachemap cache_map;
     struct zn_evict_policy eviction_policy;

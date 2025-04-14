@@ -15,3 +15,4 @@ option('EVICT_INTERVAL_US', type : 'integer', value : 100000, description : 'Sle
 option('EVICTION_POLICY', type : 'combo', choices: ['ZN_EVICT_PROMOTE_ZONE', 'ZN_EVICT_CHUNK'], value : 'ZN_EVICT_PROMOTE_ZONE',
        description : 'Eviction policy')
 option('ASSERTS', type : 'boolean', value : false, description : 'Turn asserts on')
+option('MAX_IO', type : 'integer', value : 0, description : 'Max IO (0 means no limit)')
