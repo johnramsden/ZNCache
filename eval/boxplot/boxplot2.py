@@ -24,7 +24,7 @@ def main():
     )
     parser.add_argument(
         "workload_type",
-        help="Lower-caes comma-delimited string of labels corresponding to the type of workload"
+        help="Lower-case comma-delimited string of labels corresponding to the type of workload"
              "(e.g. 'zipfian,sequential,zipfian')."
     )
     parser.add_argument(

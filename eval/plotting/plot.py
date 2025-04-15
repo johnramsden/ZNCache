@@ -4,6 +4,10 @@ import statistics
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+# Increase all font sizes by 4 points from their defaults
+rcParams.update({key: rcParams[key] + 4 for key in rcParams if "size" in key and isinstance(rcParams[key], (int, float))})
 
 def main():
     parser = argparse.ArgumentParser(
@@ -113,14 +117,16 @@ def main():
     plt.xlabel("Time (minutes)")
     y_label = args.yaxis if args.yaxis is not None else overall_default_label
     plt.ylabel(y_label)
-    plot_title = args.title if args.title is not None else overall_default_label
-    plt.title(plot_title)
+    plot_title = args.title
+    if plot_title is not None:
+        plt.title(plot_title)
     plt.legend()
 
     out = f"data/{plot_title}.png"
     if args.output is not None:
         out = args.output
-    plt.savefig(out)
+    plt.savefig(out, bbox_inches='tight', pad_inches=0)
+
     # plt.show()
 
 if __name__ == '__main__':
