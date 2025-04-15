@@ -16,6 +16,9 @@
 
 #define ZN_DIRECT_ALIGNMENT 4096
 
+#define BACKOFF_US_START 100000
+#define BACKOFF_RETRIES 5
+
 void
 zn_fg_evict(struct zn_cache *cache) {
     ZN_PROFILER_PRINTF(cache->profiler, "EVICTIONBEGIN_EVERY,%p\n", (void *) g_thread_self());
@@ -254,7 +257,6 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
     if (posix_memalign((void **)&data, align, chunk_sz) != 0) {
         nomem();
     }
-
     // Calculate starting offset
     unsigned long long wp = CHUNK_POINTER(cache->zone_size, chunk_sz, zone_pair->chunk_offset, zone_pair->zone);
     if ((wp % align) != 0) {
@@ -267,17 +269,34 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
     size_t total_read = 0;
     while (total_read < chunk_sz) {
         size_t to_read = (chunk_sz - total_read > max_io) ? max_io : (chunk_sz - total_read);
-        ssize_t r = pread(cache->fd, data + total_read, to_read, wp + total_read);
-        if (r != (ssize_t)to_read) {
-            fprintf(stderr, "Partial read at offset %llu (%zd/%zu): %s\n", wp + total_read, r, to_read, strerror(errno));
-            free(data);
-            return NULL;
+
+        int attempts = 0;
+        ssize_t r;
+        while (true) {
+            r = pread(cache->fd, data + total_read, to_read, wp + total_read);
+            if (r == (ssize_t)to_read) {
+                break; // success
+            }
+
+            if (++attempts >= BACKOFF_RETRIES) {
+                fprintf(stderr, "Partial read at offset %llu (%zd/%zu): %s\n",
+                        wp + total_read, r, to_read, strerror(errno));
+                free(data);
+                return NULL;
+            }
+
+            // exponential backoff: 100ms, 200ms, 400ms
+            g_usleep(BACKOFF_US_START * (1 << (attempts - 1))); // g_usleep in microseconds
         }
+
         total_read += r;
     }
 
     return data;
 }
+
+#define BACKOFF_US_START 100000   // 100 ms in microseconds
+#define BACKOFF_RETRIES 5         // number of retries
 
 int
 zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
@@ -285,26 +304,36 @@ zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t
     ssize_t bytes_written;
     size_t total_written = 0;
 
-    errno = 0;
     while (total_written < to_write) {
         ssize_t remaining = to_write - total_written;
         size_t chunk_size = (remaining < write_size) ? remaining : write_size;
 
-        bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
+        int attempts = 0;
+        while (true) {
+            errno = 0;
+            bytes_written = pwrite(fd, buffer + total_written, chunk_size, wp_start + total_written);
 
-        if (bytes_written <= 0 || (errno != 0)) {
-            fprintf(stderr,"Error: %s\n", strerror(errno));
-            fprintf(stderr, "Couldn't write to fd=%d at offset=%llu\n", fd, wp_start + total_written);
-            return -1;
+            if (bytes_written == (ssize_t)chunk_size) {
+                break; // success
+            }
+
+            if (++attempts >= BACKOFF_RETRIES) {
+                fprintf(stderr, "Write failed at offset %llu (%zd/%zu): %s\n",
+                        wp_start + total_written, bytes_written, chunk_size, strerror(errno));
+                return -1;
+            }
+
+            // Exponential backoff: 100ms, 200ms, 400ms, ...
+            g_usleep(BACKOFF_US_START * (1 << (attempts - 1)));
         }
 
         total_written += bytes_written;
     }
 
     assert(total_written == to_write);
-
     return 0;
 }
+
 
 unsigned char *
 zn_gen_write_buffer(struct zn_cache *cache, uint32_t zone_id, unsigned char *buffer) {
