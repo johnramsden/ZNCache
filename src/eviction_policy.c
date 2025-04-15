@@ -1,5 +1,6 @@
 #include "eviction_policy.h"
 
+#include "chunk_queue.h"
 #include "eviction_policy_promotional.h"
 #include "eviction_policy_chunk.h"
 #include "zncache.h"
@@ -80,47 +81,13 @@ zn_evict_policy_init(struct zn_evict_policy *policy, enum zn_evict_policy_type t
             assert(data);
 
             data->cache = cache;
-
             if (posix_memalign((void**)&data->chunk_buf, ZN_DIRECT_ALIGNMENT,
                                cache->max_zone_chunks * cache->chunk_sz) != 0) {
                 nomem();
             }
-            assert(data->chunk_buf);
-
             data->total_chunks = cache->nr_zones * cache->max_zone_chunks;
-
-            // zn_pair to lru_map
-            data->chunk_to_lru_map = g_hash_table_new(
-                g_direct_hash, g_direct_equal
-            );
-
-            // Setup backing pool where zones marked not in use
-            data->zone_pool = g_new(struct eviction_policy_chunk_zone, cache->nr_zones);
-            assert(data->zone_pool);
-            for (uint32_t z = 0; z < cache->nr_zones; z++) {
-                data->zone_pool[z].chunks_in_use = 0;
-                data->zone_pool[z].filled = false;
-                data->zone_pool[z].chunks = g_new(struct zn_pair, cache->max_zone_chunks);
-                assert(data->zone_pool[z].chunks);
-                for (uint32_t c = 0; c < cache->max_zone_chunks; c++) {
-                    data->zone_pool[z].chunks[c].chunk_offset = 0;
-                    data->zone_pool[z].chunks[c].in_use = false;
-                    assert(g_hash_table_insert(
-                        data->chunk_to_lru_map,
-                        &data->zone_pool[z].chunks[c],
-                        NULL
-                    ));
-                }
-            }
-
-            data->invalid_pqueue = zn_minheap_init(cache->nr_zones);
-            assert(data->invalid_pqueue);
-
+            zn_cq_init_chunk_queue(&data->chunk_queue, cache->nr_zones, cache->max_zone_chunks);
             g_mutex_init(&data->policy_mutex);
-
-            assert(data->chunk_to_lru_map);
-
-            g_queue_init(&data->lru_queue);
 
             *policy = (struct zn_evict_policy) {
                 .type = ZN_EVICT_CHUNK,
@@ -148,7 +115,7 @@ zn_evict_policy_get_cache_size(struct zn_evict_policy *policy) {
 
         case ZN_EVICT_CHUNK: {
             struct zn_policy_chunk *data = policy->data;
-            return g_queue_get_length(&data->lru_queue) * data->cache->chunk_sz;
+            return g_queue_get_length(&data->chunk_queue.lru_queue) * data->cache->chunk_sz;
         }
 
         case ZN_EVICT_ZONE: {

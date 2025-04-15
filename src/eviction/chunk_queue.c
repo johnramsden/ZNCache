@@ -8,8 +8,8 @@
 #include <stdint.h>
 
 int
-zn_init_chunk_queue(struct chunk_queue *cq, uint32_t nr_zones,
-                    uint32_t max_zone_chunks) {
+zn_cq_init_chunk_queue(struct chunk_queue *cq, uint32_t nr_zones,
+                       uint32_t max_zone_chunks) {
 
     cq->max_zone_chunks = max_zone_chunks;
 
@@ -46,7 +46,7 @@ zn_init_chunk_queue(struct chunk_queue *cq, uint32_t nr_zones,
 }
 
 int
-zn_add_chunk_to_lru(struct chunk_queue *cq, struct zn_pair chunk) {
+zn_cq_add_chunk_to_lru(struct chunk_queue *cq, struct zn_pair chunk) {
     assert(cq);
 
     struct zn_pair * chunk_key = &cq->zone_pool[chunk.zone].chunks[chunk.chunk_offset];
@@ -68,9 +68,10 @@ zn_add_chunk_to_lru(struct chunk_queue *cq, struct zn_pair chunk) {
     // We only add zones to the minheap when they are full.
     if (chunk.chunk_offset == cq->max_zone_chunks - 1) {
         dbg_printf("Adding %p (zone=%u) to pqueue\n", (void *)chunk_key, chunk.zone);
-        zone_pool_entry->pqueue_entry = zn_minheap_insert(cq->invalid_pqueue, zone_pool_entry,
-                                                          zone_pool_entry->chunks_in_use);
+        zone_pool_entry->pqueue_entry =
+            zn_minheap_insert(cq->invalid_pqueue, zone_pool_entry, zone_pool_entry->chunks_in_use);
         assert(zone_pool_entry->pqueue_entry);
+        assert(zone_pool_entry->chunks_in_use == cq->max_zone_chunks);
         zone_pool_entry->filled = true;
     }
 
@@ -78,7 +79,7 @@ zn_add_chunk_to_lru(struct chunk_queue *cq, struct zn_pair chunk) {
 }
 
 int
-zn_update_chunk_in_lru(struct chunk_queue *cq, struct zn_pair chunk) {
+zn_cq_update_chunk_in_lru(struct chunk_queue *cq, struct zn_pair chunk) {
     assert(cq);
 
     GList *node = NULL;
@@ -102,7 +103,7 @@ zn_update_chunk_in_lru(struct chunk_queue *cq, struct zn_pair chunk) {
 }
 
 int
-zn_invalidate_latest_chunk(struct chunk_queue* cq, struct zn_pair *out) {
+zn_cq_invalidate_latest_chunk(struct chunk_queue* cq, struct zn_pair *out) {
     assert(cq);
     assert(out);
 
@@ -122,9 +123,12 @@ zn_invalidate_latest_chunk(struct chunk_queue* cq, struct zn_pair *out) {
 }
 
 int
-zn_zone_dequeue(struct chunk_queue* cq, uint32_t *out_zone) {
+zn_cq_zone_dequeue(struct chunk_queue *cq, uint32_t *out_zone,
+                   struct zn_pair** valid_chunks, uint32_t *valid_length) {
     assert(cq);
     assert(out_zone);
+    assert(valid_chunks);
+    assert(valid_length);
 
     // Get the zone to be freed
     struct zn_minheap_entry *ent = zn_minheap_extract_min(cq->invalid_pqueue);
@@ -135,15 +139,20 @@ zn_zone_dequeue(struct chunk_queue* cq, uint32_t *out_zone) {
     assert(old_zone);
 
     *out_zone = old_zone->zone_id;
-    struct eviction_policy_chunk_zone *zone_key = &cq->zone_pool[old_zone->zone_id];
+    *valid_chunks = malloc(sizeof(struct zn_pair) * cq->max_zone_chunks);
+    valid_length = 0;
 
-    // Remove all chunks in the zone
+    // Remove all chunks in the zone from the LRU queue and the hash table
+    // Additionally create the list of valid chunks
     for (uint32_t i = 0; i < cq->max_zone_chunks; i++) {
-        struct zn_pair *chunk_key = &zone_key->chunks[i];
+        struct zn_pair *chunk_key = &old_zone->chunks[i];
 
         GList *node = g_hash_table_lookup(cq->chunk_to_lru_map, chunk_key);
         if (node) {
             g_queue_delete_link(&cq->lru_queue, node);
+
+	    (*valid_chunks)[*valid_length] = *chunk_key;
+	    *valid_length += 1;
         }
 
         g_hash_table_replace(cq->chunk_to_lru_map, chunk_key, NULL);
@@ -153,10 +162,15 @@ zn_zone_dequeue(struct chunk_queue* cq, uint32_t *out_zone) {
     }
     
     // Update the entry on the zone itself
-    zone_key->pqueue_entry = NULL;
-    zone_key->chunks_in_use = 0;
-    zone_key->filled = false;
+    old_zone->pqueue_entry = NULL;
+    old_zone->chunks_in_use = 0;
+    old_zone->filled = false;
 
     return 0;
+}
+
+uint32_t
+zn_cq_lru_len(struct chunk_queue * cq) {
+    return g_queue_get_length(&cq->lru_queue);
 }
 

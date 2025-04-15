@@ -1,37 +1,19 @@
 #pragma once
 
-#include "minheap.h"
+#include "chunk_queue.h"
 #include "eviction_policy.h"
 #include "glib.h"
 
-#include "cachemap.h"
-#include "zone_state_manager.h"
-
 #include <stdint.h>
 
-struct eviction_policy_chunk_zone {
-    uint32_t zone_id;
-    struct zn_pair *chunks; /**< Pool of chunks, backing for lru */
-    uint32_t chunks_in_use;
-    bool filled;
-    struct zn_minheap_entry * pqueue_entry; /**< Entry in invalid_pqueue */
-};
-
 struct zn_policy_chunk {
-    // Tail is the end of the queue, head is the least recently used
-    GQueue lru_queue;             /**< Least Recently Used (LRU) queue of chunks for eviction. */
-    GHashTable *chunk_to_lru_map; /**< Hash table mapping chunks to locations in the LRU queue. */
-    GMutex policy_mutex;          /**< LRU lock */
-
-    struct zn_minheap * invalid_pqueue; /**< Priority queue keeping track of invalid zones. Stores as data: ptrs to eviction_policy_chunk_zones */
-
-    struct eviction_policy_chunk_zone *zone_pool; /**< Pool of zones, backing for minheap */
-
+    struct chunk_queue chunk_queue; /** Data structure for storing chunk eviction state */
     struct zn_cache *cache; /**< Shared pointer to cache (not owned by policy) */
-    uint32_t total_chunks;   /**< Number of chunks on disk */
-
     unsigned char *chunk_buf; /**< Buffer for use during GC */
-};
+
+    GMutex policy_mutex;          /**< LRU lock */
+    uint32_t total_chunks;   /**< Number of chunks on disk */
+} __attribute__((aligned(128)));
 
 /** @brief Updates the chunk LRU policy
  */

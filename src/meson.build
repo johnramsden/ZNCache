@@ -11,7 +11,7 @@ srcs = files(
     'eviction_policy.c',
     'minheap.c',
     'eviction/promotional.c',
-    'eviction/chunk.c'
+    'eviction/chunk.c',
     'eviction/chunk_queue.c'
 )
 

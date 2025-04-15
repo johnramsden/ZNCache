@@ -6,6 +6,7 @@
 #include "zncache.h"
 #include "znutil.h"
 
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -144,7 +145,6 @@ zsm_init(struct zone_state_manager *state, const uint32_t num_zones, const int f
     state->writes_occurring = 0;
     state->num_zones = num_zones;
     state->backend_type = backend_type;
-    state->free_chunks = num_zones * state->max_zone_chunks;
 
     g_mutex_init(&state->state_mutex);
 
@@ -238,7 +238,7 @@ zsm_get_active_zone_batch(int chunks) {
 #endif
 
 void
-zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t count) {
+zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id) {
     assert(state);
 
     // Reset and open the zone.
@@ -258,17 +258,16 @@ zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t
 
     zone->state = ZN_ZONE_WRITE_OCCURING;
     zone->zone_id = zone_id;
-    zone->chunk_offset = count - 1; // The last index that is active
+    zone->chunk_offset = 0;
     g_queue_clear(zone->invalid);
 
     state->writes_occurring++;
-    state->free_chunks -= (state->max_zone_chunks - (count - 1));
 
     g_mutex_unlock(&state->state_mutex);
 }
 
 int
-zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair) {
+zsm_return_active_zone(struct zone_state_manager *state, const struct zn_pair *pair) {
     assert(state);
     assert(pair);
 
@@ -278,12 +277,10 @@ zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair) {
 
     struct zn_zone *zone = &state->state[pair->zone];
     assert(zone->state == ZN_ZONE_WRITE_OCCURING);
-    assert(zone->chunk_offset == pair->chunk_offset);
 
     // Update the state of the chunk
     state->writes_occurring--;
-    state->free_chunks += 1;
-    zone->chunk_offset++;
+    zone->chunk_offset = pair->chunk_offset + 1;
     if (zone->chunk_offset == state->max_zone_chunks) {
         int ret = close_zone(state, zone);
         if (ret != 0) {
@@ -309,7 +306,7 @@ zsm_evict(struct zone_state_manager *state, int zone_to_free) {
     struct zn_zone *zone = &state->state[zone_to_free];
     assert(zone->state == ZN_ZONE_FULL);
 	
-	// TODO: I think we need to free the invalid queue
+    // TODO: I think we need to free the invalid queue
     g_queue_clear(zone->invalid); // This should do it... Right?
     int ret = reset_zone(state, zone);
     if (!ret) {
@@ -320,7 +317,6 @@ zsm_evict(struct zone_state_manager *state, int zone_to_free) {
     assert(zone->state == ZN_ZONE_FREE);
 
     g_queue_clear(state->state[zone_to_free].invalid);
-    state->free_chunks += state->max_zone_chunks;
 
     g_mutex_unlock(&state->state_mutex);
     return 0;
@@ -376,17 +372,6 @@ zsm_get_num_full_zones(struct zone_state_manager *state) {
 
     return count;
 }
-
-uint64_t
-zsm_get_num_free_chunks(struct zone_state_manager *state) {
-
-    g_mutex_lock(&state->state_mutex);
-    uint64_t count = state->free_chunks;
-    g_mutex_unlock(&state->state_mutex);
-
-    return count;
-}
-
 
 uint32_t
 zsm_get_num_invalid_chunks(struct zone_state_manager *state, uint32_t zone) {

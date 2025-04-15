@@ -338,11 +338,14 @@ main(int argc, char **argv) {
            "\tChunk size: %lu\n"
            "\tBLOCK_ZONE_CAPACITY: %u\n"
            "\tWorker threads: %u\n"
+           "\tEviction type: %s\n"
            "\tEviction threads: %u\n"
            "\tWorkload file: %s\n"
            "\tMetrics file: %s\n",
-           device, (device_type == ZE_BACKEND_ZNS) ? "ZNS" : "Block", chunk_sz,
-           BLOCK_ZONE_CAPACITY, nr_threads, nr_eviction_threads,
+           device, (device_type == ZE_BACKEND_ZNS) ? "ZNS" : "Block", chunk_sz, BLOCK_ZONE_CAPACITY,
+           nr_threads,
+	   (EVICTION_POLICY == ZN_EVICT_CHUNK)? "ZN_EVICT_CHUNK" : "ZN_EVICT_PROMOTE_ZONE",
+           nr_eviction_threads,
            workload_file != NULL ? workload_file : "Simple generator",
            metrics_file != NULL ? metrics_file : "NO");
 

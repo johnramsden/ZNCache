@@ -66,6 +66,7 @@ called.
  *  @param[out] locations an out pointer for an array. This outputs the list of locations (most importantly are the chunk locations) that were associated with the zone.
  *  @param[out] count an out pointer for the number of chunks that are still valid in the zone.
  */
+__attribute__((__unused__))
 void
 zn_cachemap_compact_begin(struct zn_cachemap *map, const uint32_t zone_id, uint32_t **data_ids,
                           struct zn_pair **locations, uint32_t *count);
@@ -79,6 +80,7 @@ called.
  *  @param[in] locations An array that stores the list of locations that were associated with the zone.
  *  @param[in] count the number of chunks that were still valid in the zone.
  */
+__attribute__((__unused__))
 void
 zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const uint32_t* data_ids, struct zn_pair* locations, uint32_t count);
 
@@ -97,34 +99,14 @@ zn_cachemap_compact_end(struct zn_cachemap *map, const uint32_t zone_id, const u
 void
 zn_cachemap_insert(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
 
-/** @brief Inserts a new mapping into the data structure only if there
-    doesn't already exist an entry, and returns the entry that will
-    exist in the map after this function returns.
+/** @brief Invalidates a current mapping and replaces it with a conditional variable.
  *
- * @param data_id id of the data to be inserted
+ * @param data_id id of the data to be invalidated
  * @param location the location on disk where the data lives
- * @return the entry that will exist in the map
- *
- * Implementation notes:
- * We need this because we can run into a situation where we remove
-   something and need to insert it later on. During that time another
-   thread could have inserted a different value.
- */
-struct zn_pair
-zn_cachemap_atomic_set(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
-
-/** @brief Atomically replaces an existing mapping. The data must have
-    been inserted into the map prior to this and exist as a
-    mapping. It cannot be a data ID that is empty, has not been seen
-    before or is currently in the process of being written.
- *
- * @param data_id id of the data to be inserted
- * @param location the location on disk where the data lives
- * @return the entry that exists in the map. If it doesn't exist, the in_use field will be set to false.
  *
  */
-struct zn_pair
-zn_cachemap_atomic_replace(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
+void
+zn_cachemap_invalidate(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location);
 
 /** @brief Clears all entries of a zone in the mapping. Called by eviction threads.
  * @param zone the zone

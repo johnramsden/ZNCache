@@ -52,10 +52,9 @@ struct zone_state_manager {
     GQueue *free;       /**< The queue of zones that are free. Stores pointers to zn_zones. */
     struct zn_zone *state; /**< An array that stores the state of each zone, and acts as the backing
     memory for the active and free queues. */
-    uint64_t free_chunks; /**< The number of free chunks currently available */
     int writes_occurring;  /**< The current number of writes occuring on active zones */
 
-    // Information about the cache
+     // Information about the cache
     int fd;                       /**< File descriptor of the SSD */
     uint64_t zone_cap;            /**< Maximum storage capacity per zone in bytes. */
     uint64_t zone_size;           /**< Storage size per zone in bytes. */
@@ -112,7 +111,7 @@ zsm_get_active_zone_batch(int chunks);
  *  @param pair the chunk that was written to.
  */
 int
-zsm_return_active_zone(struct zone_state_manager *state, struct zn_pair *pair);
+zsm_return_active_zone(struct zone_state_manager *state, const struct zn_pair *pair);
 
 /** @brief Moves full zones to the free zone to make them available again
  *  @param zone_to_free the zone to make free again
@@ -126,10 +125,9 @@ zsm_evict(struct zone_state_manager *state, int zone_to_free);
 
 /** @brief Resets the zone pointer, making it writeable again from the start. Once the thread is finished updating the zone, it should call zsm_return_active_zone.
  *  @param zone_id the zone to make free again
- *  @param count the number of chunks that are still valid.
  */
 void
-zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id, uint32_t count);
+zsm_evict_and_write(struct zone_state_manager *state, uint32_t zone_id);
 
 void
 zsm_failed_to_write(struct zone_state_manager *state, struct zn_pair pair);

@@ -27,6 +27,7 @@ foreach test_name : project_tests
         meson.project_source_root() + '/src/minheap.c',
         meson.project_source_root() + '/src/eviction/promotional.c',
         meson.project_source_root() + '/src/eviction/chunk.c',
+        meson.project_source_root() + '/src/eviction/chunk_queue.c',
         test_name + '.c'
     )
     test_exe = executable(test_name, src,

@@ -136,7 +136,9 @@ zn_cachemap_insert_nolock(struct zn_cachemap *map, const uint32_t data_id,
     assert(g_hash_table_contains(map->zone_map, GUINT_TO_POINTER(data_id)));
 
     struct zone_map_result *result = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
-    assert(result->type == RESULT_COND);
+    if (result->type != RESULT_COND) {
+        return;
+    }
 
     dbg_print_g_hash_table("zone_map", map->zone_map, PRINT_G_HASH_TABLE_ZONE_MAP_RESULT);
     result->location = location; // Does this mutate the entry in the hash table?
@@ -226,8 +228,6 @@ zn_cachemap_clear_zone(struct zn_cachemap *map, uint32_t zone) {
 	assert(!"At this point the zone should be empty");
     }
 
-    g_hash_table_remove_all(map->data_map[zone]);
-
     g_mutex_unlock(&map->cache_map_mutex);
 }
 
@@ -243,11 +243,34 @@ zn_cachemap_fail(struct zn_cachemap *map, const uint32_t id) {
     g_mutex_unlock(&map->cache_map_mutex);
 }
 
-struct zn_pair
+void
+zn_cachemap_invalidate(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location) {
+    assert(map);
+    g_mutex_lock(&map->cache_map_mutex);
+
+    // There must be an entry
+    assert(g_hash_table_contains(map->zone_map, GUINT_TO_POINTER(data_id)));
+
+    struct zone_map_result *result = g_hash_table_lookup(map->zone_map, GUINT_TO_POINTER(data_id));
+    assert(result->type == RESULT_LOC);
+    assert(result->location.zone == location.zone);
+    assert(result->location.chunk_offset == location.chunk_offset);
+    assert(result->location.id == data_id);
+    result->type = RESULT_COND;
+    g_hash_table_remove(map->data_map[result->location.zone], GUINT_TO_POINTER(location.chunk_offset));
+
+    g_mutex_unlock(&map->cache_map_mutex);
+}
+
+__attribute__((__unused__)) struct zn_pair
 zn_cachemap_atomic_set(struct zn_cachemap *map, const uint32_t data_id, struct zn_pair location) {
+    (void) map;
+    (void) data_id;
+    (void) location;
     assert(!"NYI!");
 }
 
+__attribute__((__unused__))
 struct zn_pair
 zn_cachemap_atomic_replace(struct zn_cachemap *map, const uint32_t data_id,
                            struct zn_pair location) {
