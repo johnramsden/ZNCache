@@ -296,7 +296,7 @@ zn_read_from_disk(struct zn_cache *cache, struct zn_pair *zone_pair) {
 }
 
 #define BACKOFF_US_START 100000   // 100 ms in microseconds
-#define BACKOFF_RETRIES 5         // number of retries
+#define BACKOFF_RETRIES 8         // number of retries
 
 int
 zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t write_size,
@@ -317,13 +317,15 @@ zn_write_out(int fd, size_t const to_write, const unsigned char *buffer, ssize_t
                 break; // success
             }
 
+            fprintf(stdout, "Write failed at offset %llu (%zd/%zu), retry=(%d/%d): %s\n",
+                        wp_start + total_written, bytes_written, chunk_size, attempts, BACKOFF_RETRIES, strerror(errno));
+
             if (++attempts >= BACKOFF_RETRIES) {
-                fprintf(stderr, "Write failed at offset %llu (%zd/%zu): %s\n",
-                        wp_start + total_written, bytes_written, chunk_size, strerror(errno));
+                fprintf(stderr, "Write failure exceeded retries=(%d/%d)\n", attempts, BACKOFF_RETRIES);
                 return -1;
             }
 
-            // Exponential backoff: 100ms, 200ms, 400ms, ...
+            // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms...
             g_usleep(BACKOFF_US_START * (1 << (attempts - 1)));
         }
 
