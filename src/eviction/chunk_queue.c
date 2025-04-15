@@ -108,11 +108,19 @@ zn_cq_invalidate_latest_chunk(struct chunk_queue* cq, struct zn_pair *out) {
     assert(out);
 
     // Remove from queue and hash table
-    out = g_queue_pop_head(&cq->lru_queue);
-    g_hash_table_replace(cq->chunk_to_lru_map, out, NULL);
+    struct zn_pair* invalidated = g_queue_pop_head(&cq->lru_queue);
+    *out = *invalidated;
+    g_hash_table_replace(cq->chunk_to_lru_map, invalidated, NULL);
 
-    // Invalidate chunk, update zone_pool info
-    cq->zone_pool[out->zone].chunks[out->chunk_offset].in_use = false;
+    if (!cq->zone_pool[out->zone].filled) {
+	g_queue_push_tail(&cq->lru_queue, invalidated);
+	GList *new_node = g_queue_peek_tail_link(&cq->lru_queue);
+	g_hash_table_replace(cq->chunk_to_lru_map, invalidated, new_node);
+	return 1;
+    }
+    
+    assert(&cq->zone_pool[out->zone].chunks[out->chunk_offset] == invalidated);
+    invalidated->in_use = false;
     cq->zone_pool[out->zone].chunks_in_use--;
 
     // Update priority
@@ -140,7 +148,7 @@ zn_cq_zone_dequeue(struct chunk_queue *cq, uint32_t *out_zone,
 
     *out_zone = old_zone->zone_id;
     *valid_chunks = malloc(sizeof(struct zn_pair) * cq->max_zone_chunks);
-    valid_length = 0;
+    *valid_length = 0;
 
     // Remove all chunks in the zone from the LRU queue and the hash table
     // Additionally create the list of valid chunks

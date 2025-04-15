@@ -172,6 +172,7 @@ zn_policy_chunk_evict(policy_data_t policy) {
         return 1;
     }
 
+    __attribute__((__unused__))
     uint32_t free_zones = zsm_get_num_free_zones(&p->cache->zone_state);
 
     uint32_t nr_evict = EVICT_LOW_THRESH_CHUNKS-free_chunks;
@@ -181,7 +182,10 @@ zn_policy_chunk_evict(policy_data_t policy) {
     // We meet thresh for eviction - evict
     for (uint32_t i = 0; i < nr_evict; i++) {
         struct zn_pair chunk;
-        zn_cq_invalidate_latest_chunk(&p->chunk_queue, &chunk);
+        int ret = zn_cq_invalidate_latest_chunk(&p->chunk_queue, &chunk);
+        if (ret) {
+            continue;
+        }
         
         // Update ZSM, cachemap
         zsm_mark_chunk_invalid(&p->cache->zone_state, &chunk);

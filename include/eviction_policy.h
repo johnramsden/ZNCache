@@ -13,8 +13,8 @@ struct zn_cache;
 #define EVICT_HIGH_THRESH_ZONES 2
 #define EVICT_LOW_THRESH_ZONES 4
 
-#define EVICT_HIGH_THRESH_CHUNKS 6
-#define EVICT_LOW_THRESH_CHUNKS 12
+/* #define EVICT_HIGH_THRESH_CHUNKS 6 */
+/* #define EVICT_LOW_THRESH_CHUNKS 12 */
 
 /**
  * @enum zn_io_type
