@@ -5,7 +5,10 @@ from pandas import DataFrame as df, read_pickle
 import matplotlib.pyplot as plt
 from matplotlib import patches as mpatches
 import matplotlib
+from matplotlib import rcParams
 
+# Increase all font sizes by 4 points from their defaults
+rcParams.update({key: rcParams[key] + 2 for key in rcParams if "size" in key and isinstance(rcParams[key], (int, float))})
 
 def make_dict(names, args, operate):
     dict = {}
@@ -88,9 +91,9 @@ def ReadData(dir_path):
 
 def GenerateGraph(runfile, data, analysis, title, scale, genpdf_name):
     print(f"Generating {title} from {analysis}, output is {genpdf_name}")
-    font = {'size'   : 12}
+    # font = {'size'   : 12}
 
-    matplotlib.rc('font', **font)
+    # matplotlib.rc('font', **font)
     distribution = ["ZIPFIAN", "UNIFORM"]
     distrib_hatch = ['oo', '//']
     chunk_size = [536870912,65536]
@@ -99,7 +102,7 @@ def GenerateGraph(runfile, data, analysis, title, scale, genpdf_name):
     type = ["ZNS", "SSD"]
 
     idx = 0
-    fig, axes = plt.subplots(1, 8, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 8, figsize=(10, 4))
     for c, cc in zip(chunk_size, chunk_color):
         for d, dh in zip(distribution, distrib_hatch):
             for r in ratio:
@@ -121,12 +124,18 @@ def GenerateGraph(runfile, data, analysis, title, scale, genpdf_name):
                                   widths=1,
                                   medianprops=dict(linewidth=1, color='red'),
                                       patch_artist=True)
-                axes[idx].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
-                axes[idx].set_xlabel(r)
+                # axes[idx].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+                axes[idx].set_xticks([1, 2])
+                axes[idx].set_xticklabels(["ZNS", "Block"], rotation=45, fontsize=14)
+
+                # axes[idx].set_xlabel(f"1:{r}")
+                ylim = axes[idx].get_ylim()
+                axes[idx].text(1.5, ylim[1],  # Centered above both boxes
+                               f"Ratio: 1:{r}", ha='center', va='bottom', fontsize=14)
                 # axes[idx].set_ylabel("GB/s", rotation=90)
                 for label in axes[idx].get_yticklabels():
                     label.set_rotation(45)
-                plt.suptitle(title)
+                # plt.suptitle(title)
                 bp['boxes'][0].set_hatch(dh)
                 bp['boxes'][1].set_hatch(dh)
                 bp['boxes'][0].set_facecolor(cc)
@@ -137,12 +146,18 @@ def GenerateGraph(runfile, data, analysis, title, scale, genpdf_name):
     plt.tight_layout(pad=0.0)
     plt.subplots_adjust(top=0.94)
     # Alpha=.99 is due to a bug with pdf export
-    legends = [mpatches.Patch(facecolor='lightgreen', hatch='//', label='Uniform 512MB', alpha=.99),
-               mpatches.Patch(facecolor='lightgreen', hatch='oo', label='Zipfian 512MB', alpha=.99),
-               mpatches.Patch(facecolor='lightblue', hatch='//', label='Uniform 64KB', alpha=.99),
-               mpatches.Patch(facecolor='lightblue', hatch='oo', label='Zipfian 64KB', alpha=.99)]
+    legends = [mpatches.Patch(facecolor='lightgreen', hatch='oo', label='Zipfian 512MiB', alpha=.99),
+               mpatches.Patch(facecolor='lightgreen', hatch='//', label='Uniform 512MiB', alpha=.99),
+               mpatches.Patch(facecolor='lightblue', hatch='oo', label='Zipfian 64KiB', alpha=.99),
+               mpatches.Patch(facecolor='lightblue', hatch='//', label='Uniform 64KiB', alpha=.99)]
 
-    plt.legend(ncols=4, handles=legends, bbox_to_anchor=(1, -0.05), fontsize="large")
+    plt.legend(
+        ncols=4,
+        handles=legends,
+        bbox_to_anchor=(1, -0.15),  # x = center, y = push it lower
+        # loc='upper center',
+        fontsize="large"
+    )
     plt.savefig(genpdf_name, bbox_inches='tight')
 
 
@@ -160,7 +175,7 @@ if __name__ == "__main__":
     if args.r:
         runfile, data = ParseData(args.filename)
     else:
-        runfile, data = ReadData(args.filename)
+        runfile, data = ReadData(".")
 
-    GenerateGraph(runfile, data, "CACHETHROUGHPUT", "Throughput (GiB/s)", 1/2**30, "cache_throughput.pdf")
-    GenerateGraph(runfile, data, "GETLATENCY", "Latency (ms)", 1/10**6, "get_latency.pdf")
+    GenerateGraph(runfile, data, "CACHETHROUGHPUT", "Throughput (GiB/s)", 1/2**30, "cache_throughput.png")
+    GenerateGraph(runfile, data, "GETLATENCY_EVERY", "Latency (ms)", 1/10**6, "get_latency.png")
