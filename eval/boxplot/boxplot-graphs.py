@@ -136,10 +136,11 @@ def GenerateGraph(runfile, data, analysis, title, scale, genpdf_name):
     plt.subplots_adjust(wspace=0.0, hspace=0.0)
     plt.tight_layout(pad=0.0)
     plt.subplots_adjust(top=0.94)
-    legends = [mpatches.Patch(facecolor='lightgreen', hatch='//', label='Uniform 512MB'),
-               mpatches.Patch(facecolor='lightgreen', hatch='oo', label='Zipfian 512MB'),
-               mpatches.Patch(facecolor='lightblue', hatch='//', label='Uniform 64KB'),
-               mpatches.Patch(facecolor='lightblue', hatch='oo', label='Zipfian 64KB')]
+    # Alpha=.99 is due to a bug with pdf export
+    legends = [mpatches.Patch(facecolor='lightgreen', hatch='//', label='Uniform 512MB', alpha=.99),
+               mpatches.Patch(facecolor='lightgreen', hatch='oo', label='Zipfian 512MB', alpha=.99),
+               mpatches.Patch(facecolor='lightblue', hatch='//', label='Uniform 64KB', alpha=.99),
+               mpatches.Patch(facecolor='lightblue', hatch='oo', label='Zipfian 64KB', alpha=.99)]
 
     plt.legend(ncols=4, handles=legends, bbox_to_anchor=(1, -0.05), fontsize="large")
     plt.savefig(genpdf_name, bbox_inches='tight')
@@ -162,4 +163,4 @@ if __name__ == "__main__":
         runfile, data = ReadData(args.filename)
 
     GenerateGraph(runfile, data, "CACHETHROUGHPUT", "Throughput (GiB/s)", 1/2**30, "cache_throughput.pdf")
-    GenerateGraph(runfile, data, "GETLATENCY_EVERY", "Latency (ms)", 1/10**9, "get_latency.pdf")
+    GenerateGraph(runfile, data, "GETLATENCY", "Latency (ms)", 1/10**6, "get_latency.pdf")
